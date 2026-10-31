@@ -11,7 +11,9 @@ Built and maintained by [Darrin Southern](https://www.linkedin.com/in/darrin-sou
 
 ## Before you use it
 
-This is **one skill**, not a security audit. It runs one automated check and writes one report.
+This is **one skill**, not a security audit. It runs a set of automated checks (the host from
+outside your network, the server's settings, the hosted files and the server logs) and writes one
+report.
 It does **not** replace a security assessment by professionals, and a clean report is not a
 promise that the server is safe.
 
@@ -23,10 +25,14 @@ own risk, against servers you're authorised to test.
 When this skill is active, Claude will:
 
 - Confirm you're authorised to test the server, and record which services are meant to be used
+- Ask for the data owner's recovery expectations: whether there's a Disaster Recovery (DR) plan,
+  how much data they could lose, and how long the server could be down
 - Check from outside your network which ports answer, whether the TLS certificate is trusted,
   and which FileMaker web paths respond without signing in, including whether the hosted file
   list is shown to anyone (`scripts/fms_exposure_check.py`)
-- Walk you through the Admin Console settings that matter, one area at a time
+- Walk you through the Admin Console settings that matter, one area at a time, and judge the
+  backups against those expectations: how often they run, a copy beyond the server's network,
+  and a timed test restore
 - Check your FileMaker Server version, and the FileMaker Pro builds that connect to it, against
   published CVEs and Claris's release-note security fixes, fetched live from NVD at the start of each session, with a dated built-in
   list as the fallback (`scripts/fms_advisories.py`)
@@ -40,7 +46,8 @@ When this skill is active, Claude will:
 - Write a plain-English findings report in tables, written for the server's owner: what to fix
   (ranked Critical to Low, with who owns each fix), what passed, and what wasn't checked; then
   re-test after you fix things
-- Switch to containment steps if the evidence points to an attack in progress
+- Switch to containment steps if the evidence points to an attack in progress, and help choose
+  a backup from before the attack to restore
 
 ## What it won't do
 

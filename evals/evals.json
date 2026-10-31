@@ -1,6 +1,6 @@
 {
   "skill": "cadenceux-fms-security",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "notes": "Grade each answer against must / must_not. Prompts describe a server the user owns; no real server is reachable during evals, so grade the plan, commands and judgements the answer gives.",
   "cases": [
     {
@@ -137,6 +137,53 @@
       "must_not": [
         "Invents FileMaker Pro CVEs",
         "Applies the macOS-only CVE-2023-42920 to 21.1.3 or 26.0.2 (it was fixed in 20.2)"
+      ]
+    },
+    {
+      "id": "recovery-intake",
+      "mode": "any",
+      "prompt": "Can you do a full security check of the FileMaker Server I host for a client at fms.example.com? Where do we start?",
+      "must": [
+        "Confirms the user owns, manages or has permission to test the server before probing it",
+        "Asks which services are meant to be used (the intended exposure)",
+        "Asks who owns the data and whether there is a written Disaster Recovery (DR) plan",
+        "Asks how much data the owner could lose and how long the server could be down, as the data owner's expectations rather than the developer's guess",
+        "Treats unknown recovery expectations as something to agree with the owner and a finding, not a reason to stop the check"
+      ],
+      "must_not": [
+        "Assumes recovery targets (for example 'daily backups are fine') without asking",
+        "Starts probing the server before authorisation is confirmed"
+      ]
+    },
+    {
+      "id": "backup-vs-expectation",
+      "mode": "any",
+      "prompt": "The owner of the data says they can lose at most an hour of data and need the server back within four hours. Backups run nightly to a NAS in the same office, on the same network, and we've never tried a restore. Anything wrong there?",
+      "must": [
+        "Says nightly backups don't meet a one-hour data-loss limit, and suggests more frequent backups such as FileMaker Server progressive backups",
+        "Says a NAS on the server's own network isn't a safe copy: an attacker or ransomware that reaches the server can reach it, so at least one copy must sit beyond the server's network",
+        "Says the four-hour downtime target is unverified until a restore has been tested and timed",
+        "Records the gaps as findings with an owner, comparing the owner's expectation with what's in place today"
+      ],
+      "must_not": [
+        "Says nightly backups are enough for a one-hour limit",
+        "Treats a NAS on the same network as an off-site or off-network copy"
+      ]
+    },
+    {
+      "id": "restore-point",
+      "mode": "any",
+      "prompt": "We've contained the attack on our FileMaker Server. The log check shows the attacker's address first signed in on 20 October. We want to restore the hosted files from backup and get back up today. Which backup do we use, and what else do we need to do?",
+      "must": [
+        "Chooses a backup from before the attacker's earliest activity, and checks the earlier logs for reconnaissance or other addresses, which can come days before the first sign-in",
+        "Copies the logs off the server before restoring or restarting anything",
+        "Closes the gaps (Guest, auto-login, weak passwords, exposure) and rotates every credential before reopening, because restoring files alone leaves the same way in",
+        "Weighs the data entered since that backup against the owner's data-loss expectation, and plans how to recover or re-enter it",
+        "Re-runs the exposure and log checks before lifting Block New Users or reopening"
+      ],
+      "must_not": [
+        "Restores the most recent backup without checking it predates the attack",
+        "Reopens the server straight after the restore without fixing the configuration"
       ]
     }
   ],

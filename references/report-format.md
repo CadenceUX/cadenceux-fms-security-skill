@@ -23,7 +23,9 @@ working folder (or put it in the reply where no files can be written), named
 - **Say what wasn't checked**, and why. Never imply a step that didn't run was a pass.
 - **Date the evidence**: which logs and dates, and the date of the advisory data.
 - Keep the private note at the top: the report names accounts, addresses and weaknesses.
-- Keep the limits note under it: one automated check, as is, not a professional assessment.
+- Keep the limits note under it: one skill, as is, not a professional assessment.
+- **Recovery readiness is the owner's call.** Fill the expectations column with the data
+  owner's own answers from intake; where there are none, write "To agree with the owner".
 
 ## Template
 
@@ -32,8 +34,9 @@ working folder (or put it in the reply where no files can be written), named
 
 > **Private.** This report names accounts, addresses and weaknesses. Don't publish or forward it.
 >
-> **Limits.** This is one automated check, made with the cadenceux-fms-security skill and offered
-> as is, with no guarantee or support. It doesn't replace a security assessment by professionals.
+> **Limits.** This report comes from one skill, cadenceux-fms-security: a set of automated checks,
+> offered as is, with no guarantee or support. It doesn't replace a security assessment by
+> professionals.
 
 | | |
 |---|---|
@@ -47,6 +50,17 @@ working folder (or put it in the reply where no files can be written), named
 | # | Priority | What we found | Why it matters | What to do | Owner | Status |
 |---|---|---|---|---|---|---|
 | 1 | 🟠 High | ... | ... | ... | ... | Open |
+
+## Recovery readiness
+
+| | The owner expects | Today | Gap | What to do | Owner |
+|---|---|---|---|---|---|
+| **Data loss** | <e.g. at most 1 hour> | <backup interval> | ... | ... | ... |
+| **Down time** | <e.g. back within 4 hours> | <last test restore and how long it took, or "never tested"> | ... | ... | ... |
+| **Clean copy** | One copy beyond the server's network | <where the copies go> | ... | ... | ... |
+| **DR plan** | Written and agreed with the owner | <yes / no> | ... | ... | ... |
+
+Every gap here is also a row in "What to fix", with its priority, owner and status.
 
 ## What passed
 
@@ -69,8 +83,10 @@ working folder (or put it in the reply where no files can be written), named
 ## Next steps
 
 1. <the one or two fixes that matter most>
-2. Re-run the check after fixing, to confirm.
-3. <log check schedule>
+2. <where no DR plan is agreed: agree how much data the owner can lose and how long they can be
+   down, and write it down>
+3. Re-run the check after fixing, to confirm.
+4. <log check schedule>
 
 ## For your FileMaker administrator
 

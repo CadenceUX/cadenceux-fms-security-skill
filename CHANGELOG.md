@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.1.0] — 2026-10-31
+
+Recovery readiness: plan for when, not if. Built with `cadenceux-skill-creator` 2.2.0.
+
+### Added
+
+- Intake asks for the data owner's recovery expectations: whether there's a written Disaster
+  Recovery (DR) plan, how much data they could lose, how long the server could be down, and who
+  is called. Unknown answers are recorded as "to agree with the owner" and become a finding;
+  they never stop the check. New rule in SKILL.md: plan for when, not if.
+- `references/server-config.md`: a Recovery readiness section. S10 (backups) is now judged
+  against the owner's expectations: the backup interval (including Progressive Backup) against
+  the data-loss limit, a copy beyond the server's network (a NAS the server can write to doesn't
+  count), a timed test restore against the downtime limit, and enough history to restore from
+  before an attack. No copy beyond the network rates High when the files hold personal data.
+- `references/report-format.md`: a Recovery readiness table (the owner's expectation, today,
+  the gap, what to do), and a next step to agree the DR plan when there isn't one.
+- `references/incident-response.md`: open the DR plan alongside containment (never instead of
+  it), choose a restore point from before the attacker's earliest activity, weigh the data gap
+  against the owner's data-loss limit, and restore onto a fixed server. Also: disconnect the
+  attacker's open sessions (Block New Users leaves them running), check backups the server
+  could write to for tampering, check Event.log for server settings a file restore doesn't roll
+  back, and run the file audit on restored copies.
+- Recovery readiness counts rebuilding the server: backups hold the hosted files, not the
+  server's settings, schedules, plug-ins or certificate.
+- Evals: `recovery-intake`, `backup-vs-expectation` and `restore-point`. Baseline 0/3; every
+  model 4/4 after the fixes (`evals/results-2026-10-31-v1.1.0.md`).
+
+### Changed
+
+- "One automated check" now reads "one skill, a set of automated checks written up in one
+  report" in SKILL.md, the README and the report's limits note, to match what the skill runs.
+
 ## [1.0.0] — 2026-10-31 (updated 2026-10-31, pre-release)
 
 First release, built with `cadenceux-skill-creator` 2.2.0.

@@ -2,6 +2,13 @@
 
 Contain first, preserve evidence, then investigate. Work in this order.
 
+## 0. Open the DR plan (alongside step 1, never instead of it)
+
+Find the Disaster Recovery plan and the recovery expectations from intake. How long the owner
+can be down decides when to move users to a DR server or a temporary intake, and the plan says
+who to call. With no plan, tell the owner what containment cuts off as you do it. Never let a
+missing plan delay containment.
+
 ## 1. Stop new connections (minutes)
 
 1. **Block New Users** in the Admin Console. Existing sessions keep working; nobody new can
@@ -11,6 +18,8 @@ Contain first, preserve evidence, then investigate. Work in this order.
 3. **Close any hosted file that uses Guest or auto-login.** Those sign in with no password, so
    they are the easiest way in.
 4. Block the attacking addresses, knowing that this campaign rotates addresses.
+5. **Disconnect the attacker's open sessions** (Admin Console > Clients). Block New Users leaves
+   sessions already connected running.
 
 Steps 1 and 2 also cut off WebDirect users and integrations. Tell the people affected.
 
@@ -29,6 +38,17 @@ attacker reached as exposed.
 
 ## 4. Fix and recover
 
+- **Choose the restore point.** If files need restoring, use a backup from before the earliest
+  activity from the attacker's addresses. Check the earlier logs for reconnaissance and other
+  unknown addresses first: it can come days before the first sign-in. A backup taken after the
+  attacker got in may hold changed accounts, scripts or data. If the backups sit where the
+  server could write to them, check they weren't altered or deleted.
+- **Weigh the gap.** Records entered since that backup need recovering or re-entering. Show the
+  owner the gap against the data loss they said they could bear, and agree how to fill it.
+- **Restore onto a fixed server.** Restoring files alone leaves the same way in: close the gaps
+  below before anyone reconnects. A file restore doesn't roll back server settings either:
+  check Event.log for settings, schedule and plug-in changes made from the attacker's addresses,
+  and reverse them. Run the file audit on the restored copies before anyone uses them.
 - Rotate every password and key that touches the server: file accounts, Admin Console, Admin
   API keys held by management tools or hosting providers, and integration credentials.
 - Remove Guest and auto-login, generic accounts, and unneeded extended privileges

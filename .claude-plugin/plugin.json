@@ -1,8 +1,8 @@
 {
   "name": "cadenceux-fms-security",
   "displayName": "CadenceUX FileMaker Server Security Check",
-  "version": "1.0.0",
-  "description": "Interactive security check of a Claris FileMaker Server you own or manage: internet exposure, server settings, known CVEs live from NVD, account security in the hosted files from Save a Copy as XML, and a log review for password spraying and bulk record downloads, ending in a plain-English findings report.",
+  "version": "1.1.0",
+  "description": "Interactive security check of a Claris FileMaker Server you own or manage: internet exposure, server settings, known CVEs live from NVD, account security in the hosted files from Save a Copy as XML, a log review for password spraying and bulk record downloads, and backups checked against the data owner's limits on data loss and downtime, ending in a plain-English findings report.",
   "author": { "name": "Darrin Southern", "url": "https://cadenceux.com.au" },
   "homepage": "https://github.com/CadenceUX/cadenceux-fms-security-skill",
   "repository": "https://github.com/CadenceUX/cadenceux-fms-security-skill",

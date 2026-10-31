@@ -4,14 +4,15 @@ description: >-
   Runs an interactive security check of a Claris FileMaker Server the user owns or manages:
   ports and web paths exposed to the internet, server misconfigurations, known CVEs for its
   version (live from NVD), accounts and privileges in the hosted files (from Save a Copy as XML
-  exports), and a review of every server log for password spraying, Guest and auto-login abuse,
-  and bulk record downloads through the Data API or OData. Ends with a ranked findings report,
-  and gives containment steps if an attack is under way. Use when asked to security-check,
-  audit, harden, pen test or review the logs of a FileMaker Server or hosted FileMaker files,
-  to check whether a server was hit by an automated FileMaker attack or has known CVEs, or when
-  FMS logs (Access.log, Event.log, TopCallStats.log, an nginx access log) are shared for review.
-  Not for FileMaker Server installation or upgrades, general FileMaker schema, script or
-  privilege-set design, or servers the user isn't authorised to test.
+  exports), every server log for password spraying, Guest and auto-login abuse and bulk Data
+  API or OData downloads, and backups against the data owner's limits on data loss and
+  downtime. Ends with a ranked findings report, and gives containment and restore steps if an
+  attack is under way. Use when asked to security-check, audit, harden, pen test or review the
+  logs of a FileMaker Server or hosted FileMaker files, to check whether a server was hit by an
+  automated FileMaker attack or has known CVEs, or when FMS logs (Access.log, Event.log, an
+  nginx access log) are shared for review. Not for FileMaker Server installation or upgrades,
+  general FileMaker schema, script or privilege-set design, or servers the user isn't
+  authorised to test.
 license: CC-BY-4.0
 compatibility: >-
   Designed for Claude Code, where it runs the bundled Python scripts (standard library only).
@@ -19,7 +20,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADT is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # FileMaker Server security check
@@ -42,9 +43,11 @@ guidance.
   user before calling them staff or attackers.
 - **The report is sensitive.** It holds addresses, account names and weaknesses. Save it
   locally and tell the user not to publish it.
-- **One check, not a professional audit.** Say so once in intake and again in the report: this
-  is one automated check, offered as is with no guarantee or support, and it doesn't replace a
-  security assessment by professionals.
+- **One skill, not a professional audit.** Say so once in intake and again in the report: this
+  is one skill, a set of automated checks written up in one report, offered as is with no
+  guarantee or support, and it doesn't replace a security assessment by professionals.
+- **Plan for when, not if.** Recovery expectations belong to the data owner, not the developer
+  or Claude. Ask for them, never assume them, and judge the backups against them.
 
 ## Workflow
 
@@ -53,7 +56,7 @@ its own; do intake first regardless.
 
 ```
 FMS security check:
-- [ ] 1. Intake: scope, authorisation, intended exposure
+- [ ] 1. Intake: scope, authorisation, intended exposure, recovery expectations
 - [ ] 2. Exposure check from outside the network
 - [ ] 3. Server configuration
 - [ ] 4. Hosted file security
@@ -81,6 +84,12 @@ Ask in one message (with the ask-user tool where the surface has one):
 5. Which hosted files exist, including deployment and utility files, and whether the user can
    open each with a [Full Access] account in FileMaker Pro (needed for the file audit).
 6. Whether code execution is available here (Claude Code), or the user will run commands.
+7. **Recovery expectations, from the data owner.** Who owns the data; whether there's a written
+   Disaster Recovery (DR) plan; how much data they could lose (the time back to the last usable
+   backup); how long the server could be down before it hurts the business; and who is called
+   when it happens (hosting provider, IT, whoever owns privacy). Ask for the owner's answers,
+   not the developer's guess. If they're unknown, record "to agree with the owner" and carry on:
+   the gap becomes a finding, never a reason to stop.
 
 ### 2. Exposure check
 
@@ -110,7 +119,11 @@ python3 scripts/fms_admin_review.py <hostname>
 It asks for the Admin Console password itself and refuses to run without a terminal, so never
 run it for them and never take the password. Then cover what it can't see (Deny Guest and
 auto-login, backups, the operating system, who else holds admin access) with the user, one
-area at a time, asking for a screenshot or a yes/no per item.
+area at a time, asking for a screenshot or a yes/no per item. Judge backups (S10) against the
+recovery expectations from intake: the backup interval against the data the owner can lose, a
+copy beyond the server's network, and a timed restore against the downtime they can bear.
+Write each gap as a finding with a priority and an owner (who fixes it), and put it in the
+report's Recovery readiness table.
 
 ### 4. Hosted file security
 
@@ -141,8 +154,9 @@ period in question; a gap is a limit on the verdict, never a pass.
 
 Read [references/report-format.md](references/report-format.md) and write the report in that
 format: written for the server's owner, in tables and plain English. It has a summary table,
-"What to fix" (priority, what we found, why it matters, what to do, owner, status), "What
-passed", "Staff computers to update", "Not checked", "Next steps", and a closing section for the
+"What to fix" (priority, what we found, why it matters, what to do, owner, status), "Recovery
+readiness" (the owner's expectations against today's backups and restores), "What passed",
+"Staff computers to update", "Not checked", "Next steps", and a closing section for the
 FileMaker administrator that holds the commands and evidence. Save it as a Markdown file in the
 user's working folder (or put it in the reply where no files can be written).
 
@@ -151,7 +165,8 @@ fixes items, re-run the exposure check and the affected checks, and update the S
 Suggest a log check schedule from [references/log-review.md](references/log-review.md).
 
 **If anything points to an attack in progress or a compromise**, stop the review and follow
-[references/incident-response.md](references/incident-response.md) first.
+[references/incident-response.md](references/incident-response.md) first. It covers containment,
+the DR plan, and choosing a backup from before the attack to restore.
 
 ## What the automated attacks do
 
@@ -188,7 +203,7 @@ output.
 
 Once per session, on the first request this skill handles: fetch
 `https://github.com/CadenceUX/cadenceux-fms-security-skill/raw/main/VERSION` and compare it with
-this skill's version (1.0.0). If newer, start the answer with:
+this skill's version (1.1.0). If newer, start the answer with:
 
 > ⚠️ **Skill update available:** this skill is v[installed]; v[latest] is at
 > https://github.com/CadenceUX/cadenceux-fms-security-skill/releases
