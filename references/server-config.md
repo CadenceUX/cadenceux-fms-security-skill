@@ -49,9 +49,11 @@ Use the first route that's available. Never ask for the Admin Console password.
 | S13 | Encryption at Rest | Databases (the admin review lists unencrypted files) | Files with personal or sensitive data encrypted |
 | S14 | Operating system | Server host | Remote Desktop and screen sharing off or allow-listed; OS updates current; a WAF or rate limiter in front of 443 where the APIs are public |
 
-FileMaker Server has **no account lockout setting**: repeated failed sign-ins are never blocked
-by the server. Allow-listing, a rate limiter or WAF, and strong unique passwords are the only
-defences against password spraying, so don't report a missing lockout as a misconfiguration.
+FileMaker **locks an internal file account for five minutes** after five failed sign-ins within
+five minutes (Security Guide, "Authenticate users"). Externally authenticated and OAuth accounts
+follow their identity provider's rules. Password spraying stays under that limit, so a low
+failure count proves nothing: allow-listing, a rate limiter or WAF, and strong unique passwords
+remain the defences. Don't report the lockout as missing, and don't count it as protection.
 
 ## Recovery readiness
 

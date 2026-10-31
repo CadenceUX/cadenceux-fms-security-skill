@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.1] — 2026-10-31
+
+Correction: FileMaker does lock file accounts.
+
+### Fixed
+
+- SKILL.md and `references/server-config.md` said FileMaker Server has no account lockout. The
+  Claris FileMaker Security Guide ("Authenticate users") says five failed sign-ins within five
+  minutes lock an internal file account for five minutes. The attack pattern now says password
+  spraying stays under that limit, which is why a low failure count proves nothing, and the
+  server review neither reports the lockout as missing nor counts it as protection.
+- `references/log-review.md`: the breach test (a failing address that later signed in
+  successfully is possible compromise until the user confirms it), and why a low failure count
+  per account isn't reassurance. SKILL.md's attack pattern and log review step name the
+  defences against spraying and say a low failure count is never reassurance.
+- Evals: `lockout-fact` added. Baseline ❌; Haiku, Sonnet and Opus ✅ after the fixes
+  (`evals/results-2026-10-31-v1.1.1.md`).
+
 ## [1.1.0] — 2026-10-31
 
 Recovery readiness: plan for when, not if. Built with `cadenceux-skill-creator` 2.2.0.

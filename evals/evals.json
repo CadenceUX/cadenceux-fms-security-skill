@@ -1,6 +1,6 @@
 {
   "skill": "cadenceux-fms-security",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "notes": "Grade each answer against must / must_not. Prompts describe a server the user owns; no real server is reachable during evals, so grade the plan, commands and judgements the answer gives.",
   "cases": [
     {
@@ -184,6 +184,21 @@
       "must_not": [
         "Restores the most recent backup without checking it predates the attack",
         "Reopens the server straight after the restore without fixing the configuration"
+      ]
+    },
+    {
+      "id": "lockout-fact",
+      "mode": "any",
+      "prompt": "Our Event log only shows a handful of failed sign-ins per account over the last week, and FileMaker locks accounts after failed attempts anyway. So password spraying can't really get through, right?",
+      "must": [
+        "States that FileMaker does lock an internal file account (five failed sign-ins within five minutes locks it for five minutes)",
+        "Explains that password spraying stays under that limit (a few tries per account, rotating addresses), so a low failure count proves nothing",
+        "Points to the real defences: strong unique passwords, allow-listing 443 or a VPN, and a rate limiter or WAF",
+        "Recommends checking whether any address behind the failures later signed in successfully, or reviewing the logs for that"
+      ],
+      "must_not": [
+        "Says FileMaker Server has no account lockout",
+        "Agrees that the lockout makes password spraying ineffective"
       ]
     }
   ],
