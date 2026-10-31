@@ -1,0 +1,378 @@
+{
+ "checked": "2026-10-31",
+ "sources": {
+  "nvd": "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=FileMaker",
+  "release_notes": "https://help.claris.com/en/server-release-notes/content/"
+ },
+ "latest": {
+  "26": "26.0.3",
+  "22": "22.0.7",
+  "21": "21.1.8"
+ },
+ "oldest_supported_line": 21,
+ "notes": "cves: from NVD, each affected range tagged with its product (server, pro, cloud) from NVD's CPE data; source is the Claris article where NVD links one; platform is set where the CVE names one. release_note_fixes: FileMaker Server security fixes in Claris's release notes without their own CVE, matched only on the lines Claris names. cloud entries are listed, never matched: Claris patches FileMaker Cloud.",
+ "cves": [
+  {
+   "id": "CVE-2026-86926",
+   "published": "2026-09-23",
+   "cvss": 7.8,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "26.0.3"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049219&language=en_US",
+   "summary": "A heap buffer overflow vulnerability in the FileMaker Server database engine block parsing routine allowed a maliciously crafted .fmp12 database file to cause memory corruption, potentially leading to"
+  },
+  {
+   "id": "CVE-2026-86930",
+   "published": "2026-09-23",
+   "cvss": 9.1,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "26.0.3"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049218&language=en_US",
+   "summary": "An out-of-bounds read vulnerability in FileMaker Server for Linux allowed an attacker uploading a specially crafted image file to a container field to disclose process memory during thumbnail generati",
+   "platform": "Linux"
+  },
+  {
+   "id": "CVE-2026-86934",
+   "published": "2026-09-23",
+   "cvss": 9.1,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "26.0.3"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049217&language=en_US",
+   "summary": "An authorization bypass vulnerability in the FileMaker Server Web Publishing Engine allowed requests containing an extended privilege header to bypass the disabled Custom Web Publishing with XML setti"
+  },
+  {
+   "id": "CVE-2026-86938",
+   "published": "2026-09-23",
+   "cvss": 7.3,
+   "affected": [
+    {
+     "product": "pro",
+     "from": null,
+     "before": "26.0.3"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049220&language=en_US",
+   "summary": "A DLL hijacking vulnerability in the FileMaker Pro installer for Windows allowed a local user to execute arbitrary code with elevated administrator privileges by placing a malicious DLL file in the in",
+   "platform": "Windows"
+  },
+  {
+   "id": "CVE-2026-43752",
+   "published": "2026-07-09",
+   "cvss": 4.9,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "26.0.1"
+    }
+   ],
+   "source": "https://community.claris.com/en/s/article/Arbitrary-Code-Execution-Vulnerability-Addressed-in-FileMaker-Server-via-Miniforge-Installer-Upload",
+   "summary": "An authenticated administrator may be able to achieve arbitrary code execution on the host system by uploading a malicious file through the Open Source LLM setup feature in the Admin Console"
+  },
+  {
+   "id": "CVE-2026-43680",
+   "published": "2026-05-12",
+   "cvss": 7.2,
+   "affected": [
+    {
+     "product": "cloud",
+     "from": null,
+     "before": "2.22.0.5"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049153&language=en_US",
+   "summary": "A Remote Code Execution vulnerability in Claris FileMaker Cloud allowed a user with Admin Console privileges to bypass a front-end restriction on OS Script schedule types and execute arbitrary operati"
+  },
+  {
+   "id": "CVE-2026-43685",
+   "published": "2026-05-12",
+   "cvss": 7.2,
+   "affected": [
+    {
+     "product": "cloud",
+     "from": null,
+     "before": "2.22.0.5"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049154&language=en_US",
+   "summary": "A Remote Code Execution vulnerability in Claris FileMaker Cloud allowed a user with Admin Console privileges to inject arbitrary operating system commands through unsanitized input in the External ODB"
+  },
+  {
+   "id": "CVE-2025-46320",
+   "published": "2026-02-24",
+   "cvss": 6.1,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "21.1.7"
+    },
+    {
+     "product": "server",
+     "from": "22.0.1",
+     "before": "22.0.4"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049123&language=en_US",
+   "summary": "A cross-site scripting (XSS) vulnerability in a FileMaker WebDirect custom homepage could lead to unauthorized access and remote code execution"
+  },
+  {
+   "id": "CVE-2025-46294",
+   "published": "2025-12-16",
+   "cvss": 5.3,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "22.0.4"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000048450&language=en_US",
+   "summary": "To enhance security, the FileMaker Server 22.0.4 installer now includes an option to disable IIS short filename enumeration by setting NtfsDisable8dot3NameCreation in the Windows registry",
+   "platform": "Windows"
+  },
+  {
+   "id": "CVE-2025-46295",
+   "published": "2025-12-16",
+   "cvss": 9.8,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "22.0.4"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049059&language=en_US",
+   "summary": "Apache Commons Text versions prior to 1.10.0 included interpolation features that could be abused when applications passed untrusted input into the text-substitution API"
+  },
+  {
+   "id": "CVE-2025-46296",
+   "published": "2025-12-16",
+   "cvss": 5.4,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "22.0.4"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000049056&language=en_US",
+   "summary": "An authorization bypass vulnerability in FileMaker Server Admin Console allowed administrator roles with minimal privileges to access administrative features such as viewing license details and downlo"
+  },
+  {
+   "id": "CVE-2023-42955",
+   "published": "2024-05-14",
+   "cvss": 4.9,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "20.3.1"
+    }
+   ],
+   "source": "https://support.claris.com/s/article/Administrator-role-passwords-being-exposed-when-logged-into-the-Admin-Console?language=en_US",
+   "summary": "Claris International has successfully resolved an issue of potentially exposing password information to front-end websites when signed in to the Admin Console with an administrator role"
+  },
+  {
+   "id": "CVE-2024-27790",
+   "published": "2024-05-14",
+   "cvss": 7.5,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "20.3.2"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000041674&language=en_US",
+   "summary": "Claris International has resolved an issue of potentially allowing unauthorized access to records stored in databases hosted on FileMaker Server"
+  },
+  {
+   "id": "CVE-2024-27794",
+   "published": "2024-04-15",
+   "cvss": 6.1,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "20.3.2"
+    }
+   ],
+   "source": "https://support.claris.com/s/article/Security-Vulnerability-in-Claris-FileMaker-Server?language=en_US",
+   "summary": "Claris FileMaker Server before version 20.3.2 was susceptible to a reflected Cross-Site Scripting vulnerability due to an improperly handled parameter in the FileMaker WebDirect login endpoint"
+  },
+  {
+   "id": "CVE-2023-42954",
+   "published": "2024-03-21",
+   "cvss": 4.9,
+   "affected": [
+    {
+     "product": "server",
+     "from": null,
+     "before": "20.3.1"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000041424&language=en_US",
+   "summary": "A privilege escalation issue existed in FileMaker Server, potentially exposing sensitive information to front-end websites when signed in to the Admin Console with an administrator role"
+  },
+  {
+   "id": "CVE-2023-42920",
+   "published": "2024-03-19",
+   "cvss": 7.8,
+   "affected": [
+    {
+     "product": "pro",
+     "from": null,
+     "before": "20.2"
+    }
+   ],
+   "source": "https://support.claris.com/s/article/FileMaker-Security-Information?language=en_US",
+   "summary": "Claris International has fixed a dylib hijacking vulnerability in the FileMaker Pro.app and Claris Pro.app versions on macOS.",
+   "platform": "macOS"
+  },
+  {
+   "id": "CVE-2021-44147",
+   "published": "2021-11-22",
+   "cvss": 5.5,
+   "affected": [
+    {
+     "product": "pro",
+     "from": null,
+     "before": "19.4.1"
+    },
+    {
+     "product": "server",
+     "from": null,
+     "before": "19.4.1"
+    }
+   ],
+   "source": "https://support.claris.com/s/answerview?anum=000035751",
+   "summary": "An XML External Entity issue in Claris FileMaker Pro and Server (including WebDirect) before 19.4.1 allows a remote attacker to disclose local files via a crafted XML/Excel document and perform server"
+  }
+ ],
+ "release_note_fixes": [
+  {
+   "id": "RN-26.0.3-imagemagick",
+   "published": "2026-09",
+   "cvss": null,
+   "affected": [
+    {
+     "from": "26.0.0",
+     "before": "26.0.3",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Linux: ImageMagick updated for CVE-2025-55004"
+  },
+  {
+   "id": "RN-26.0.1-admin-rce",
+   "published": "2026-07",
+   "cvss": null,
+   "affected": [
+    {
+     "from": "26.0.0",
+     "before": "26.0.1",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Two further authenticated-administrator code-execution fixes (JDK upload, Admin Console); cookies given SameSite; Admin Console dependency updates"
+  },
+  {
+   "id": "RN-22.0.6-21.1.8-schedules",
+   "published": "2026-03",
+   "cvss": null,
+   "affected": [
+    {
+     "from": "22.0.0",
+     "before": "22.0.6",
+     "product": "server"
+    },
+    {
+     "from": null,
+     "before": "21.1.8",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Path traversal to remote code execution through system-level script schedules; Admin Console tokens moved out of local storage"
+  },
+  {
+   "id": "RN-22.0.5-21.1.7-tomcat",
+   "published": "2026",
+   "cvss": null,
+   "affected": [
+    {
+     "from": "22.0.0",
+     "before": "22.0.5",
+     "product": "server"
+    },
+    {
+     "from": null,
+     "before": "21.1.7",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Tomcat updated (CVE-2025-31650, CVE-2025-55752, CVE-2025-55754, CVE-2025-61795); Admin Console path traversal fixed"
+  },
+  {
+   "id": "RN-22.0.1-hardening",
+   "published": "2025",
+   "cvss": null,
+   "affected": [
+    {
+     "from": "22.0.0",
+     "before": "22.0.1",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Denial-of-service hardening; FileMaker Pro and Go clients older than 21.0.1 blocked"
+  },
+  {
+   "id": "RN-21.1.5-admin-roles",
+   "published": "2025",
+   "cvss": null,
+   "affected": [
+    {
+     "from": null,
+     "before": "21.1.5",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Administrator roles could exceed their assigned privileges"
+  },
+  {
+   "id": "RN-21.0.1-restrict-access",
+   "published": "2024",
+   "cvss": null,
+   "affected": [
+    {
+     "from": null,
+     "before": "21.0.1",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Admin Console Restrict Access could be bypassed with a forged X-Forwarded-For header"
+  }
+ ]
+}
