@@ -80,6 +80,7 @@ several accounts or files. Flags:
 | `MANY-ACCOUNTS` | 3+ different account names from one address | High |
 | `MANY-FILES` | 3+ files from one address | High |
 | `GENERIC/DEFAULT` | Blank, Admin, Guest, web, user, api, test, filemaker | High from an unknown address; often harmless from staff (a saved blank attempt before the real sign-in) |
+| `XDBC` | The failure came through ODBC/JDBC (`[fmxdbc]`, port 2399) | High from an unknown address: the attacks spray 2399 as well as 443. From a known SQL or BI tool, a daily failure usually means a stale stored password |
 
 Then the breach test: any failing address **without** `NEVER-SUCCEEDED` signed in at some point.
 Check Access.log and the Data API and OData logs for when, and as which account. A success after
@@ -89,7 +90,9 @@ confirm it.
 A low failure count per account is not reassurance. FileMaker locks a file account for five
 minutes after five failed sign-ins within five minutes, and spraying stays under that; group the
 failures by address and by account name together. The defences are strong unique passwords,
-allow-listing 443 or a VPN, and a rate limiter or WAF (server-config.md).
+allow-listing 443 or a VPN, and a rate limiter or WAF (server-config.md). A web rate limiter or
+WAF doesn't see port 2399: when `XDBC` failures appear, close 2399 at the firewall, or allow it
+only from the SQL or BI tools' own addresses.
 
 **Admin Console sign-ins.** Every admin sign-in with address and account. Any admin sign-in or
 failure from a `NEW` address needs the user to confirm it the same day. `GENERIC` means the

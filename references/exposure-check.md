@@ -32,7 +32,7 @@ local only and must not answer from outside.
 | 443 open | Expected if any web service or the Admin Console is used. Prefer an IP allow-list or VPN, especially when the Data API or OData is on |
 | 5003 open | Expected if remote FileMaker Pro or Go clients connect. Prefer an IP allow-list or VPN |
 | 80 open | Fine if it only redirects to HTTPS |
-| 2399 open | Finding unless an external SQL client needs it; the attacks use it too |
+| 2399 open | Finding unless an external SQL client needs it; the attacks use it too. Where a BI or reporting tool needs ODBC/JDBC, allow 2399 only from that tool's addresses, never from anywhere. A web rate limiter or WAF doesn't cover it |
 | 16000 open | Finding on 19.4 or later (it was the Admin Console port only up to 19.3). On a secondary machine it should be open only to the primary |
 | 16001–16004, 1895, 5013, 8091, 50003, 50004, 3000, 8998, 9889, 9898, 16020, 16021 open | Finding: local-only ports reachable from outside mean the firewall isn't doing its job |
 | 22, 3389, 5900, 5985/5986 open | Finding: remote management reachable from anywhere. Claris's checklist says to turn off Remote Desktop |
@@ -74,7 +74,7 @@ custom certificate also turns on HSTS. Note the expiry date in the report.
 | Severity | Examples |
 |---|---|
 | Critical | File names listed without sign-in on a server whose files use Guest or auto-login; local-only ports open |
-| High | Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused; remote management ports open; default certificate |
+| High | Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; remote management ports open; default certificate |
 | Medium | Data API, OData, XML or WebDirect answering when unused; 443 or 5003 not allow-listed where clients are known |
 | Low | Default FileMaker Server web page |
 

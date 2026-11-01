@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.2] — 2026-11-02
+
+ODBC/JDBC (port 2399) as an attack route.
+
+### Added
+
+- `scripts/fms_logcheck.py`: failed sign-ins that came through ODBC/JDBC (`[fmxdbc]` in
+  Event.log) get an `XDBC` flag, and the section opens with how many failures came through port
+  2399 and from how many addresses.
+- `references/log-review.md`: what `XDBC` means and how to weigh it, and that a web rate
+  limiter or WAF doesn't see port 2399.
+- `references/exposure-check.md`: where a BI or reporting tool needs ODBC/JDBC, allow 2399 only
+  from that tool's addresses. 2399 open to any address while in use is High.
+- SKILL.md: the attack pattern sprays ODBC/JDBC on 2399 as well as 443, and the defences
+  allow-list both.
+- Evals: `xdbc-port-2399` added (`evals/results-2026-11-02-v1.1.2.md`).
+
+### Not verified
+
+- The `[fmxdbc]` tag in Event.log: forum posts show the bracket naming the connection type
+  (`[fmapp]`, `[fmxml]`), but no real ODBC/JDBC failure line was available to test against.
+
 ## [1.1.1] — 2026-10-31
 
 Correction: FileMaker does lock file accounts.

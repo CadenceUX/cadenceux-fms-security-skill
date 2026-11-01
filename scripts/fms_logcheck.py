@@ -139,7 +139,7 @@ def main():
         print(f"{flag}{ip:40} n={r['n']:<6} {r['first']}..{r['last'][5:]} pc={sorted(r['pc'])[:3]} "
               f"app={sorted(r['app'])[:2]} acct={sorted(r['acct'])[:5]}")
 
-    fails = collections.defaultdict(lambda: dict(n=0, acct=set(), files=set(), chan=set()))
+    fails = collections.defaultdict(lambda: dict(n=0, xdbc=0, acct=set(), files=set(), chan=set()))
     admin, admin_fail, other = collections.Counter(), collections.Counter(), collections.Counter()
     for l in lines(logs, "Event.log"):
         if l[:16] < since or not l[:4].isdigit():
@@ -153,6 +153,9 @@ def main():
                 r["files"].add(m.group(1))
                 r["acct"].add(m.group(2) or "")
                 r["chan"].add(m.group(3))
+                # The bracket names the connection type ([fmapp], [fmxml] ...); fmxdbc is ODBC/JDBC on 2399
+                if m.group(3).lower() == "fmxdbc":
+                    r["xdbc"] += 1
         elif "Administrator authentication failed" in msg:
             admin_fail[ip_of(msg)] += 1
         elif "Administrator connected" in msg:
@@ -164,7 +167,11 @@ def main():
             other[re.sub(r"\d", "#", msg)[:150]] += 1
 
     print(f"\n## Failed FileMaker sign-ins: {sum(r['n'] for r in fails.values())} from {len(fails)} addresses")
-    print("   Flags: NEVER-SUCCEEDED, MANY-ACCOUNTS (3+), MANY-FILES (3+), GENERIC/DEFAULT account")
+    print("   Flags: NEVER-SUCCEEDED, MANY-ACCOUNTS (3+), MANY-FILES (3+), GENERIC/DEFAULT account, XDBC (ODBC/JDBC, port 2399)")
+    xdbc = {ip: r["xdbc"] for ip, r in fails.items() if r["xdbc"]}
+    if xdbc:
+        print(f"   ODBC/JDBC: {sum(xdbc.values())} of the failures came through port 2399, from {len(xdbc)} address(es).\n"
+              "   The attacks use 2399 too; unless a known SQL or BI tool explains them, close 2399 or allow-list it")
     for ip, r in sorted(fails.items(), key=lambda x: -x[1]["n"]):
         flags = []
         if ip not in seen_before and ip not in succeeded and ip not in LOCAL:
@@ -175,6 +182,8 @@ def main():
             flags.append("MANY-FILES")
         if {a.lower() for a in r["acct"]} & GENERIC:
             flags.append("GENERIC/DEFAULT")
+        if r["xdbc"]:
+            flags.append("XDBC")
         print(f"  {ip:40} n={r['n']:<4} accts={sorted(r['acct'])[:5]} files={len(r['files'])} "
               f"via={sorted(r['chan'])} {' '.join(flags)}")
 

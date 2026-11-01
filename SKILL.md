@@ -20,7 +20,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADT is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.1.1"
+  version: "1.1.2"
 ---
 
 # FileMaker Server security check
@@ -150,7 +150,8 @@ python3 scripts/fms_logcheck.py <logs.zip or folder> ["YYYY-MM-DD HH:MM"]
 Go through each flagged address with the user. A clean result needs the logs to cover the
 period in question; a gap is a limit on the verdict, never a pass. A low failure count or the
 account lockout is never reassurance: say why (spraying stays under the lockout), and name the
-defences: strong unique passwords, allow-listing 443 or a VPN, and a rate limiter or WAF.
+defences: strong unique passwords, allow-listing 443 and 2399 or a VPN, and a rate limiter or
+WAF. Failures flagged `XDBC` came through 2399, which a web rate limiter doesn't see.
 
 ### 6. Findings report and re-test
 
@@ -179,9 +180,9 @@ from automated attacks") and that this skill's checks look for:
    Filter databases and Deny Guest and auto-login are both on).
 2. Open each file through Guest, auto-login, or a default Admin account with no password.
 3. Spray common passwords at generic account names, a few tries at a time from rotating
-   addresses. FileMaker locks a file account for five minutes after five failed sign-ins within
-   five minutes, and spraying stays under that. The defences are strong unique passwords,
-   allow-listing 443 or a VPN, and a rate limiter or WAF.
+   addresses, through ODBC/JDBC on port 2399 as well as 443. FileMaker locks a file account
+   for five minutes after five failed sign-ins within five minutes, and spraying stays under that. The defences are strong unique passwords,
+   allow-listing 443 and 2399 or a VPN, and a rate limiter or WAF.
 4. Once in, pull records through the Data API, 200 at a time, across every layout available.
 
 No FileMaker Server flaw is involved: every step works through configuration. Steps 2 and 4
@@ -207,7 +208,7 @@ output.
 
 Once per session, on the first request this skill handles: fetch
 `https://github.com/CadenceUX/cadenceux-fms-security-skill/raw/main/VERSION` and compare it with
-this skill's version (1.1.1). If newer, start the answer with:
+this skill's version (1.1.2). If newer, start the answer with:
 
 > ⚠️ **Skill update available:** this skill is v[installed]; v[latest] is at
 > https://github.com/CadenceUX/cadenceux-fms-security-skill/releases

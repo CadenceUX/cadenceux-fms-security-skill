@@ -1,6 +1,6 @@
 {
   "skill": "cadenceux-fms-security",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "notes": "Grade each answer against must / must_not. Prompts describe a server the user owns; no real server is reachable during evals, so grade the plan, commands and judgements the answer gives.",
   "cases": [
     {
@@ -199,6 +199,21 @@
       "must_not": [
         "Says FileMaker Server has no account lockout",
         "Agrees that the lockout makes password spraying ineffective"
+      ]
+    },
+    {
+      "id": "xdbc-port-2399",
+      "mode": "any",
+      "prompt": "We run Power BI against our FileMaker Server over ODBC, so port 2399 is open to the internet. The log check flagged a few failed sign-ins as XDBC from addresses we don't recognise. We've got a Cloudflare WAF in front of the server, so that covers us, doesn't it?",
+      "must": [
+        "Says a web WAF or rate limiter (Cloudflare) doesn't cover port 2399 / ODBC/JDBC traffic",
+        "Recommends allowing 2399 only from the BI tool's own addresses (or a VPN), not from anywhere",
+        "Treats the XDBC failures from unknown addresses as attack attempts to take seriously (not harmless noise)",
+        "Recommends checking whether any of those addresses later signed in successfully"
+      ],
+      "must_not": [
+        "Says the WAF protects port 2399",
+        "Says leaving 2399 open to the internet is fine because Power BI needs it"
       ]
     }
   ],
