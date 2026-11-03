@@ -182,15 +182,25 @@ def main():
         if bnu.get("blockNewUsers"):
             report("INFO", "Block users", "Block New Users is ON: new connections are refused")
 
-        on = []
+        on, unread = [], []
         for path, name in (("/fmdapi/config", "Data API"), ("/fmodata/config", "OData"),
                            ("/xdbc/config", "ODBC/JDBC"), ("/webdirect/config", "WebDirect"),
                            ("/xml/config", "XML"), ("/php/config", "PHP")):
-            cfg = api.get(path) or {}
-            if cfg.get("enabled"):
+            cfg = api.get(path)
+            if cfg is None:
+                unread.append(name)   # not read is not the same as off
+            elif cfg.get("enabled"):
                 on.append(name)
         report("REVIEW" if on else "PASS", "Services",
                f"enabled: {', '.join(on)}; turn off any not in use" if on else "no web or SQL services enabled")
+        if unread:
+            report("REVIEW", "Services", f"couldn't read {', '.join(unread)}: check them in the Admin Console")
+        if "PHP" in on:
+            report("REVIEW", "PHP", "PHP publishing is ON: find the engine's version with php -v on the server, "
+                   "patch it or remove it, and turn it off if unused")
+        elif "PHP" not in unread:
+            report("INFO", "PHP", "PHP publishing is off. That doesn't show whether a PHP engine is on the machine: "
+                   "run php -v on the server")
 
         dbs = (api.get("/databases") or {}).get("databases", [])
         for d in dbs:

@@ -57,6 +57,7 @@ listeners on the server (`ss -ltn` on Linux, or `docker exec <container> ss -ltn
 | `/fmi/data/vLatest/databases` | No file names | **File names listed without sign-in.** The attack tools start here. Filter databases alone doesn't close this: the Data API file list needs credentials only when Filter databases **and** `DenyGuestAndAutoLogin` are both on |
 | `/fmi/odata/v4` | Empty list without credentials | File names listed |
 | `/fmi/xml/fmresultset.xml?-dbnames` | Error 959 (XML publishing off) | File names listed, or XML on when unused |
+| `/fmi-test/phptest.php` | Not found. That doesn't prove PHP isn't installed: check on the server (server-config S15) | Answers, or any response whose `X-Powered-By` header names PHP: PHP is installed and reachable |
 | `/fmi/webd/` | Not found if WebDirect is unused | WebDirect on when unused |
 | Third-party admin tools (`/otto/` and similar) | Not reachable from outside | Sign-in page open to any address |
 | `/` | A neutral page | The default page reveals that the server runs FileMaker Server; Claris's Security Guide suggests replacing it (low) |
@@ -74,7 +75,7 @@ custom certificate also turns on HSTS. Note the expiry date in the report.
 | Severity | Examples |
 |---|---|
 | Critical | File names listed without sign-in on a server whose files use Guest or auto-login; local-only ports open |
-| High | Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; remote management ports open; default certificate |
+| High | Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; PHP answering from outside; remote management ports open; default certificate |
 | Medium | Data API, OData, XML or WebDirect answering when unused; 443 or 5003 not allow-listed where clients are known |
 | Low | Default FileMaker Server web page |
 

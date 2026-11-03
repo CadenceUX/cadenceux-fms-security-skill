@@ -69,6 +69,7 @@ PATHS = {
     "/fmi/odata/v4": "OData service document (hosted file list)",
     "/fmi/xml/fmresultset.xml?-dbnames": "XML Custom Web Publishing file list",
     "/fmi/webd/": "WebDirect launch centre",
+    "/fmi-test/phptest.php": "PHP test page (FileMaker Server's own, from when it bundled PHP)",
     "/otto/": "OttoFMS console (third-party admin tool)",
 }
 
@@ -101,15 +102,21 @@ def certificate(host):
         return f"could not read ({e})"
 
 
+def server_header(headers):
+    """The Server header, plus X-Powered-By when a page admits to PHP or anything else."""
+    powered = headers.get("X-Powered-By", "")
+    return headers.get("Server", "") + (f" X-Powered-By: {powered}" if powered else "")
+
+
 def fetch(host, path):
     ctx = ssl.create_default_context()
     ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE   # the certificate is judged separately above
     req = urllib.request.Request(f"https://{host}{path}", headers={"User-Agent": "fms-exposure-check"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT, context=ctx) as r:
-            return r.status, r.headers.get("Server", ""), r.read(20000).decode("utf-8", "replace")
+            return r.status, server_header(r.headers), r.read(20000).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
-        return e.code, e.headers.get("Server", ""), e.read(20000).decode("utf-8", "replace")
+        return e.code, server_header(e.headers), e.read(20000).decode("utf-8", "replace")
     except (OSError, ssl.SSLError) as e:
         return None, "", str(e)
 
@@ -179,7 +186,8 @@ def main():
             note = f"  <-- LISTS {len(names)} FILES WITHOUT SIGN-IN: {', '.join(names[:5])}"
         elif xml_error:
             code = xml_error.group(1)
-            note = "  XML publishing is off (error 959)" if code == "959" else f"  FileMaker error {code}, no files listed"
+            note = "  XML publishing is off (error 959)" if code == "959" else \
+                f"  <-- XML publishing is ON (error {code}), no files listed; turn it off if unused"
         elif status == 200 and path in ("/fmi/odata/v4", "/fmi/data/vLatest/databases"):
             note = "  answers, but lists no files without credentials"
         elif status == 200 and path == "/" and re.search(r"FileMaker", body):
@@ -188,11 +196,18 @@ def main():
             note = "  Data API is on"
         elif status == 200 and path in ("/admin-console/", "/otto/"):
             note = "  <-- sign-in page open to any address"
+        elif status == 200 and "-dbnames" in path:
+            note = "  <-- XML publishing answers; turn it off if unused"
+        elif status == 200 and "phptest" in path:
+            note = "  <-- PHP answers: find its version on the server, then patch or remove it"
+        elif status and "phptest" in path:
+            note = "  no PHP test page; this doesn't prove PHP isn't installed, so check on the server"
         elif status in (502, 503):
             note = "  service not running behind the web server"
         print(f"  {str(status or '-'):5} {path:40} {what}{note}")
-        if server and path == "/":
-            print(f"        Server header: {server}")
+        if server and (path == "/" or "X-Powered-By" in server):
+            php = "  <-- names PHP: patch or remove it" if re.search(r"X-Powered-By:.*PHP", server, re.I) else ""
+            print(f"        Server header: {server}{php}")
         time.sleep(PAUSE)
 
 

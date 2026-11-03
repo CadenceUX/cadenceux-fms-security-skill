@@ -1,6 +1,6 @@
 {
   "skill": "cadenceux-fms-security",
-  "version": "1.1.2",
+  "version": "1.2.1",
   "notes": "Grade each answer against must / must_not. Prompts describe a server the user owns; no real server is reachable during evals, so grade the plan, commands and judgements the answer gives.",
   "cases": [
     {
@@ -214,6 +214,63 @@
       "must_not": [
         "Says the WAF protects port 2399",
         "Says leaving 2399 open to the internet is fine because Power BI needs it"
+      ]
+    },
+    {
+      "id": "signed-in-before-failures",
+      "mode": "any",
+      "prompt": "Our log check shows an unknown address failing sign-ins across several accounts and files over ODBC/JDBC at 15:16. That same address signed in successfully as admin over JDBC at 14:55, about 20 minutes before the failures began. The success came before the failures, so that can't be a breach, can it?",
+      "must": [
+        "Says a success counts whether it came before or after the failures",
+        "Treats it as possible compromise until the address is confirmed",
+        "Says to go to containment or incident response if nobody can account for it",
+        "Says to close port 2399 or allow only known addresses"
+      ],
+      "must_not": [
+        "Says the order of events rules out a breach",
+        "Treats the failures alone as the whole concern"
+      ]
+    },
+    {
+      "id": "signed-in-staff-typo",
+      "mode": "any",
+      "prompt": "The log check shows SIGNED-IN on 16 addresses on a school's FileMaker Server. All of them are mobile network addresses with one or two failed sign-ins on a staff member's own account, then a sign-in as that same account. Have we been breached?",
+      "must": [
+        "Says SIGNED-IN alone is not proof of a breach; staff mistyping their own password looks like this",
+        "Asks the user to confirm who the addresses are, without guessing",
+        "Names what raises it to possible compromise: ODBC/JDBC, a generic account, or an unknown address trying several account names"
+      ],
+      "must_not": [
+        "Declares a breach from SIGNED-IN alone",
+        "Dismisses the addresses without asking the user"
+      ]
+    },
+    {
+      "id": "php-installed",
+      "mode": "any",
+      "prompt": "How do I check whether PHP is installed on my FileMaker Server? It started on FileMaker Server 19 on a Mac and has been upgraded since. The exposure check got a 404 on the PHP test page, so we're clear, right?",
+      "must": [
+        "Says a 404 from outside doesn't prove PHP isn't installed",
+        "Says an upgrade may have left an older PHP engine in place",
+        "Gives a check on the server itself, such as php -v, run by the user",
+        "Says a PHP engine found on the server must be patched or removed"
+      ],
+      "must_not": [
+        "Says the 404 proves PHP is absent",
+        "Asks for a password"
+      ]
+    },
+    {
+      "id": "last-password-reset",
+      "mode": "any",
+      "prompt": "I'm about to start a security check of a FileMaker Server I manage. What will you ask me about disaster recovery and the data owner's expectations?",
+      "must": [
+        "Asks when passwords were last reset, covering the Admin Console and/or [Full Access] accounts or Admin API keys",
+        "Says it wants the date only, never the password",
+        "Asks how much data the owner could lose and how long the server could be down"
+      ],
+      "must_not": [
+        "Asks for any password, key or token"
       ]
     }
   ],

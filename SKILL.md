@@ -2,8 +2,8 @@
 name: cadenceux-fms-security
 description: >-
   Runs an interactive security check of a Claris FileMaker Server the user owns or manages:
-  ports and web paths exposed to the internet, server misconfigurations, known CVEs for its
-  version (live from NVD), accounts and privileges in the hosted files (from Save a Copy as XML
+  ports and web paths exposed to the internet, PHP and XML publishing, server misconfigurations,
+  known CVEs (live from NVD), accounts and privileges in the hosted files (from Save a Copy as XML
   exports), every server log for password spraying, Guest and auto-login abuse and bulk Data
   API or OData downloads, and backups against the data owner's limits on data loss and
   downtime. Ends with a ranked findings report, and gives containment and restore steps if an
@@ -20,7 +20,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADT is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.1.2"
+  version: "1.2.1"
 ---
 
 # FileMaker Server security check
@@ -86,9 +86,11 @@ Ask in one message (with the ask-user tool where the surface has one):
 6. Whether code execution is available here (Claude Code), or the user will run commands.
 7. **Recovery expectations, from the data owner.** Who owns the data; whether there's a written
    Disaster Recovery (DR) plan; how much data they could lose (the time back to the last usable
-   backup); how long the server could be down before it hurts the business; and who is called
-   when it happens (hosting provider, IT, whoever owns privacy). Ask for the owner's answers,
-   not the developer's guess. If they're unknown, record "to agree with the owner" and carry on:
+   backup); how long the server could be down before it hurts the business; who is called
+   when it happens (hosting provider, IT, whoever owns privacy); and when passwords were last
+   reset (Admin Console, [Full Access] accounts, Admin API keys: the date only, never the
+   password). Ask for the owner's answers, not the developer's guess. If they're unknown, record
+   "to agree with the owner" and carry on:
    the gap becomes a finding, never a reason to stop.
 
 ### 2. Exposure check
@@ -118,7 +120,7 @@ python3 scripts/fms_admin_review.py <hostname>
 
 It asks for the Admin Console password itself and refuses to run without a terminal, so never
 run it for them and never take the password. Then cover what it can't see (Deny Guest and
-auto-login, backups, the operating system, who else holds admin access) with the user, one
+auto-login, backups, a PHP engine on the machine (S15), the operating system, who else holds admin access) with the user, one
 area at a time, asking for a screenshot or a yes/no per item. Judge backups (S10) against the
 recovery expectations from intake: the backup interval against the data the owner can lose, a
 copy beyond the server's network, and a timed restore against the downtime they can bear.
@@ -151,7 +153,10 @@ Go through each flagged address with the user. A clean result needs the logs to 
 period in question; a gap is a limit on the verdict, never a pass. A low failure count or the
 account lockout is never reassurance: say why (spraying stays under the lockout), and name the
 defences: strong unique passwords, allow-listing 443 and 2399 or a VPN, and a rate limiter or
-WAF. Failures flagged `XDBC` came through 2399, which a web rate limiter doesn't see.
+WAF. Failures flagged `XDBC` came through 2399, which a web rate limiter doesn't see. A sign-in
+before or after the failures counts. `POSSIBLE-COMPROMISE` (the sign-in was over ODBC/JDBC or as
+a generic account, or a new address tried 3+ account names) means stop and confirm who it is;
+`SIGNED-IN` alone is often staff mistyping, so ask rather than assume.
 
 ### 6. Findings report and re-test
 
@@ -198,8 +203,8 @@ Windows install it from python.org).
 | `scripts/fms_advisories.py` | Fetches FileMaker CVEs live from NVD (one request), merges Claris release-note fixes from `references/advisories.json`, and lists every published issue a given FileMaker Server version (or FileMaker Pro version, with `--pro`) is exposed to. Falls back to the bundled list offline and says how old it is |
 | `scripts/fms_file_audit.py` | Reads Save a Copy as XML exports, no server connection: Guest, auto-login, generic and [Full Access] accounts, extended privileges, Encryption at Rest, reference protection, passwords typed into scripts, credentials in Insert from URL. Never prints hashes or script text |
 | `scripts/fms_admin_review.py` | Run **by the user** in their own terminal: signs in to the Admin API, reads version, certificate, secure-files, Admin Console restriction, Filter databases, services, per-file API privileges and encryption, connected Guest sessions, admin roles, schedules and plug-ins (GET only), signs out |
-| `scripts/fms_exposure_check.py` | TCP connect to FileMaker and admin ports, HTTP-to-HTTPS redirect and TLS certificate checks, unauthenticated GET of the FileMaker web paths. Reports open ports, file lists shown before sign-in, the default web page, and services answering |
-| `scripts/fms_logcheck.py` | Reads a Logs folder or zip: new addresses, FileMaker Pro/Go client builds with published issues, flagged failed sign-ins, admin sign-ins, settings and file events, Admin API errors, record download bursts, web-server requests |
+| `scripts/fms_exposure_check.py` | TCP connect to FileMaker and admin ports, HTTP-to-HTTPS redirect and TLS certificate checks, unauthenticated GET of the FileMaker web paths. Reports open ports, file lists shown before sign-in, the default web page, services answering, and XML or PHP publishing that answers |
+| `scripts/fms_logcheck.py` | Reads a Logs folder or zip: new addresses, FileMaker Pro/Go client builds with published issues, flagged failed sign-ins, addresses that failed and also signed in, ODBC/JDBC connections, admin sign-ins, settings and file events, Admin API errors, record download bursts, web-server requests |
 
 Without code execution, give the user the command for each script and ask them to paste the
 output.
@@ -208,7 +213,7 @@ output.
 
 Once per session, on the first request this skill handles: fetch
 `https://github.com/CadenceUX/cadenceux-fms-security-skill/raw/main/VERSION` and compare it with
-this skill's version (1.1.2). If newer, start the answer with:
+this skill's version (1.2.1). If newer, start the answer with:
 
 > ⚠️ **Skill update available:** this skill is v[installed]; v[latest] is at
 > https://github.com/CadenceUX/cadenceux-fms-security-skill/releases

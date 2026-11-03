@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.2.1] — 2026-11-03
+
+Wording corrections in the changelog and eval notes. No change to the checks.
+
+## [1.2.0] — 2026-11-03
+
+Log patterns for attacks through ODBC/JDBC, and checks for PHP and XML publishing. With thanks to
+Wim Decorte for the correct pattern to check the logs for these attacks. Built with
+`cadenceux-skill-creator` 2.2.0.
+
+### Added
+
+- `scripts/fms_logcheck.py`:
+  - `SIGNED-IN`: an address with failed sign-ins that also signed in, at any date, before or after
+    the failures, with the account, time and connection type.
+  - `POSSIBLE-COMPROMISE`: that sign-in was over ODBC/JDBC or as a generic account, or a new address
+    tried 3+ account names. `SIGNED-IN` alone is often staff mistyping, so it's a question for the
+    user, not a verdict.
+  - An ODBC/JDBC connections section, because an attacker who gets in first time leaves no failure.
+  - `RATE`: 20+ failures from one address in 10 minutes, and `SERVER-ITSELF` for failures from
+    127.0.0.1, which are usually scripts and don't count towards `RATE`.
+  - PHP and XML requests by status, with any page that was served marked `ANSWERED`, and XML record
+    calls counted in `BURST`.
+- `scripts/fms_exposure_check.py`: requests FileMaker Server's PHP test page, reports an
+  `X-Powered-By` header that names PHP, and says when XML publishing is on.
+- `scripts/fms_admin_review.py`: reports PHP on its own line, and a service whose setting couldn't
+  be read as not read rather than off.
+- `references/server-config.md`: S15, a PHP engine on the machine, checked on the server. FileMaker
+  Server no longer installs PHP, but an upgrade may leave an older engine in place.
+- Intake and Recovery readiness ask when passwords were last reset: the date only, never the
+  password. A restored file brings back its accounts' passwords from the day of that backup.
+- Evals: `signed-in-before-failures`, `signed-in-staff-typo`, `php-installed`, `last-password-reset`
+  (`evals/results-2026-11-03-v1.2.0.md`).
+
+### Changed
+
+- `references/log-review.md`: the breach test is a success at any time, before or after the
+  failures.
+- Failed sign-ins show the full count of account names, and more of the names. More generic account
+  names are recognised.
+
+### Fixed
+
+- `Event-old.log` wasn't read, so older failed sign-ins were missed.
+- Rotated `nginx-access.log-YYYY-MM-DD` files, gzipped or not, weren't read, although the guide says
+  to collect them.
+- `NEVER-SUCCEEDED` was given to failures older than the Access log, where a sign-in can't be ruled
+  out. They're now `BEFORE-ACCESS-LOG`.
+- An account name that looks like a typed password is hidden in the output, so it doesn't reach a
+  report.
+- `references/incident-response.md` and `references/log-review.md` named only port 443 where 2399
+  belongs too.
+- `references/server-config.md`: the "Versions and security fixes" heading was missing.
+
+### Verified
+
+- The `[fmxdbc]` tag in Event.log, left unverified in 1.1.2, is confirmed, along with
+  `JDBC [fmxdbc]` as the connection type in Access.log.
+
 ## [1.1.2] — 2026-11-02
 
 ODBC/JDBC (port 2399) as an attack route.

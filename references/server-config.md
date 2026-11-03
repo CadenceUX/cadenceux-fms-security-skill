@@ -48,6 +48,7 @@ Use the first route that's available. Never ask for the Admin Console password.
 | S12 | Perform Script on Server | Configuration > Script Engine | Limited to what's needed (`fmsadmin set serverconfig scriptsessions=0` turns it off) |
 | S13 | Encryption at Rest | Databases (the admin review lists unencrypted files) | Files with personal or sensitive data encrypted |
 | S14 | Operating system | Server host | Remote Desktop and screen sharing off or allow-listed; OS updates current; a WAF or rate limiter in front of 443 where the APIs are public |
+| S15 | PHP engine | `php -v` on the server, run by the user; look for a `php` folder under FileMaker Server's Web Publishing folder | No engine, or a patched and supported PHP. FileMaker Server no longer installs PHP, but older servers bundled it and an upgrade may leave it in place. `fms_advisories.py` lists FileMaker CVEs only, so check the version against php.net. Unused: remove it |
 
 FileMaker **locks an internal file account for five minutes** after five failed sign-ins within
 five minutes (Security Guide, "Authenticate users"). Externally authenticated and OAuth accounts
@@ -74,10 +75,15 @@ finding with a priority and an owner (who fixes it: the developer, the hosting p
   certificate, so keep a record of those to rebuild from.
 - **Reach back before an attack.** Keep enough backup history to restore from before the
   earliest suspicious activity: reconnaissance can come days before the attempt (KB 000049228).
+- **Last password reset.** The date for the Admin Console accounts, [Full Access] accounts and
+  Admin API keys: never the passwords. No date, or one older than a known incident, a provider
+  breach or someone with access leaving, is a finding. A restored file brings back its accounts'
+  passwords as they were on the day of that backup, so the plan resets them after a restore.
 - **The plan itself.** A written DR plan, agreed with the data owner, that names who is called
   and in what order. Expectations nobody has agreed go in the report as "to agree with the
   owner", rated Check.
 
+## Versions and security fixes
 
 Match the server's version against `security-advisories.md` with `scripts/fms_advisories.py
 <version>`, which also checks NVD live. The admin review reports how many published issues

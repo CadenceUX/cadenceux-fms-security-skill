@@ -58,6 +58,7 @@ working folder (or put it in the reply where no files can be written), named
 | **Data loss** | <e.g. at most 1 hour> | <backup interval> | ... | ... | ... |
 | **Down time** | <e.g. back within 4 hours> | <last test restore and how long it took, or "never tested"> | ... | ... | ... |
 | **Clean copy** | One copy beyond the server's network | <where the copies go> | ... | ... | ... |
+| **Last password reset** | <how often, if the owner has said> | <date for Admin Console, [Full Access] and Admin API keys, or not known> | ... | ... | ... |
 | **DR plan** | Written and agreed with the owner | <yes / no> | ... | ... | ... |
 
 Every gap here is also a row in "What to fix", with its priority, owner and status.

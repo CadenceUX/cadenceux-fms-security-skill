@@ -71,28 +71,41 @@ used it. `UPDATE` marks a Pro build with a published issue (from `security-advis
 these are client-side and go in the report's "clients to update" section. Very old builds also
 point to machines nobody maintains.
 
-**Failed FileMaker sign-ins.** The password-spraying signature is one address failing across
-several accounts or files. Flags:
+**Failed FileMaker sign-ins.** The check reads Event.log and Event-old.log. The password-spraying
+signature is one address failing across several accounts or files. Flags:
 
 | Flag | Meaning | Weight |
 |---|---|---|
-| `NEVER-SUCCEEDED` | Address failed and never signed in, before or during the window | High when combined with any other flag |
+| `POSSIBLE-COMPROMISE` | The address failed and also signed in, and either the sign-in was over ODBC/JDBC or as a generic account, or it's a `NEW` address that tried 3+ account names | Stop and confirm who it is today. Unconfirmed, go to `incident-response.md` |
+| `SIGNED-IN` | The address failed and also signed in, with the account, time and connection type. A success counts **before or after** the failures | Check, don't assume. One or two failures, then a sign-in as the same person's own account, is usually staff mistyping. Confirm the address with the user |
+| `NEVER-SUCCEEDED` | Address failed and never signed in, in the Access logs supplied | High when combined with any other flag |
+| `BEFORE-ACCESS-LOG` | The failures are older than the Access log, so a sign-in can't be ruled out | A limit on the verdict, never a pass |
 | `MANY-ACCOUNTS` | 3+ different account names from one address | High |
 | `MANY-FILES` | 3+ files from one address | High |
 | `GENERIC/DEFAULT` | Blank, Admin, Guest, web, user, api, test, filemaker | High from an unknown address; often harmless from staff (a saved blank attempt before the real sign-in) |
+| `RATE` | 20+ failures from one address in 10 minutes | High across several account names. On one name, usually a person or a saved password retrying |
+| `SERVER-ITSELF` | The failure came from 127.0.0.1: the client name is usually a script or schedule | Not an attack in itself, but a schedule with a stale password shouldn't be failing. Find it and fix it |
 | `XDBC` | The failure came through ODBC/JDBC (`[fmxdbc]`, port 2399) | High from an unknown address: the attacks spray 2399 as well as 443. From a known SQL or BI tool, a daily failure usually means a stale stored password |
 
-Then the breach test: any failing address **without** `NEVER-SUCCEEDED` signed in at some point.
-Check Access.log and the Data API and OData logs for when, and as which account. A success after
-the failures from an address the user doesn't recognise is possible compromise until they
-confirm it.
+Then the breach test: a success at any time, **before or after** the failures, from an address
+the user doesn't recognise is possible compromise until they confirm it. Attackers sign in with
+what works, then go on trying other accounts and files. Check Access.log and the Data API and
+OData logs for when, and as which account.
+
+An account name shown as hidden may be a password typed into the account box. Have that person
+change the password, and don't copy the log line into a report.
 
 A low failure count per account is not reassurance. FileMaker locks a file account for five
 minutes after five failed sign-ins within five minutes, and spraying stays under that; group the
 failures by address and by account name together. The defences are strong unique passwords,
-allow-listing 443 or a VPN, and a rate limiter or WAF (server-config.md). A web rate limiter or
+allow-listing 443 and 2399 or a VPN, and a rate limiter or WAF (server-config.md). A web rate limiter or
 WAF doesn't see port 2399: when `XDBC` failures appear, close 2399 at the firewall, or allow it
 only from the SQL or BI tools' own addresses.
+
+**ODBC/JDBC connections.** Every connection through port 2399 in the window, whether or not
+anything failed, because an attacker who gets in first time leaves no failure. Each address should
+match a SQL or BI tool the user can name. An unknown address here is possible compromise, and a
+`GENERIC` account makes it worse.
 
 **Admin Console sign-ins.** Every admin sign-in with address and account. Any admin sign-in or
 failure from a `NEW` address needs the user to confirm it the same day. `GENERIC` means the
@@ -111,13 +124,16 @@ failed sign-in section misses them. This section looks for volume instead:
 |---|---|
 | `HIGH-VOLUME` | 20+ MB to one client in 10 minutes (normal peaks are a few MB) |
 | `WIDE` | 40+ tables in 10 minutes from a `NEW` address or a Guest or generic account. Developers routinely reach 60+ tables, so width alone is not flagged |
-| `BURST` | 100+ Data API or OData record calls, or 5+ layouts, from one address in 10 minutes |
+| `BURST` | 100+ Data API, OData or XML record calls, or 5+ layouts, from one address in 10 minutes |
 
 TopCallStats keeps only the busiest calls, so real totals are higher than shown.
 
 **Web server.** Requests to FileMaker paths and the busiest addresses. Internet scanning for
 `.env`, WordPress or PHP paths that gets 404 is noise. A `200` from an unknown address on
-`/fmi/data`, `/fmi/odata`, `/fmi/xml` or `/fmi/admin` is not.
+`/fmi/data`, `/fmi/odata`, `/fmi/xml` or `/fmi/admin` is not, and any line marked `ANSWERED` means a
+PHP or XML path was served: check the server for PHP (server-config S15). Rotated
+`nginx-access.log-YYYY-MM-DD` files are read too, gzipped or not. IIS and Apache logs aren't
+parsed: read those by hand.
 
 ## Identifying addresses
 

@@ -13,8 +13,8 @@ missing plan delay containment.
 
 1. **Block New Users** in the Admin Console. Existing sessions keep working; nobody new can
    connect.
-2. **Block port 443 at the firewall** except for known addresses, or turn off the Data API,
-   OData and XML connectors if no one needs them right now.
+2. **Block ports 443 and 2399 at the firewall** except for known addresses, or turn off the Data
+   API, OData, XML and ODBC/JDBC connectors if no one needs them right now.
 3. **Close any hosted file that uses Guest or auto-login.** Those sign in with no password, so
    they are the easiest way in.
 4. Block the attacking addresses, knowing that this campaign rotates addresses.

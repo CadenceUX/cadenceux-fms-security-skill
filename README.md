@@ -29,7 +29,7 @@ When this skill is active, Claude will:
   how much data they could lose, and how long the server could be down
 - Check from outside your network which ports answer, whether the TLS certificate is trusted,
   and which FileMaker web paths respond without signing in, including whether the hosted file
-  list is shown to anyone (`scripts/fms_exposure_check.py`)
+  list is shown to anyone, and whether XML or PHP publishing answers (`scripts/fms_exposure_check.py`)
 - Walk you through the Admin Console settings that matter, one area at a time, and judge the
   backups against those expectations: how often they run, a copy beyond the server's network,
   and a timed test restore
@@ -40,7 +40,7 @@ When this skill is active, Claude will:
   generic accounts, extended privileges, Encryption at Rest, reference protection, and passwords
   typed into scripts (`scripts/fms_file_audit.py`). No extra tools needed; Claris ADT, if you
   already have it, adds a blank-password check
-- Review the server logs for password spraying, attempts on generic accounts, admin sign-ins
+- Review the server logs for password spraying, sign-ins from addresses that also failed, ODBC/JDBC connections, attempts on generic accounts, admin sign-ins
   from new addresses, unexpected changes, and bulk record downloads through the Data API or
   OData, which leave no failed sign-in (`scripts/fms_logcheck.py`)
 - Write a plain-English findings report in tables, written for the server's owner: what to fix

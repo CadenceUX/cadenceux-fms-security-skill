@@ -2,10 +2,10 @@
 """FMS log check: what happened on a FileMaker Server since a given time.
 
 Reads a folder of FileMaker Server logs (or the .zip they came in) and reports:
-new addresses, failed sign-ins with warning flags, Admin Console sign-ins,
-security and file events, Admin API errors, bursts of record downloads,
-and outside requests to FileMaker web paths. Uses only the Python
-standard library.
+new addresses, failed sign-ins with warning flags, addresses that failed and
+also signed in, ODBC/JDBC connections, Admin Console sign-ins, security and
+file events, Admin API errors, bursts of record downloads, and outside requests
+to FileMaker, PHP and XML web paths. Uses only the Python standard library.
 
 Usage:
     python3 fms_logcheck.py <log folder or .zip> [since]
@@ -23,6 +23,7 @@ flag means and when to escalate.
 """
 import collections
 import datetime
+import gzip
 import ipaddress
 import os
 import re
@@ -31,12 +32,18 @@ import tempfile
 import zipfile
 
 GENERIC = {"", "admin", "administrator", "web", "webuser", "user", "api", "apiuser",
-           "test", "guest", "[guest]", "filemaker"}
+           "test", "guest", "[guest]", "filemaker", "fmsadmin", "fmserver", "website"}
 IP = r"(\d+\.\d+\.\d+\.\d+|[0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7})"
 LOCAL = {"127.0.0.1", "::1"}
 DOWNLOAD_MB = 20      # per client per 10 minutes; busy production servers peaked near 6 MB
 WIDE_TABLES = 40      # developers reach 60+ tables, so WIDE needs a NEW or GUEST/GENERIC client too
+FAIL_RATE = 20        # failures per address per 10 minutes; a person retrying rarely passes this on more than one name
 API_CALLS = 100       # Data API / OData record calls per address per 10 minutes (attackers page 200 at a time)
+
+
+def is_log(name):
+    """A .log file, or a rotated web-server log (nginx-access.log-YYYY-MM-DD, perhaps gzipped)."""
+    return name.endswith(".log") or re.fullmatch(r"nginx-access\.log-[\d-]+(\.gz)?", name) is not None
 
 
 def open_logs(path):
@@ -47,14 +54,14 @@ def open_logs(path):
         with zipfile.ZipFile(path) as z:
             for m in z.infolist():
                 name = os.path.basename(m.filename)
-                if name.endswith(".log") and not m.is_dir():
+                if is_log(name) and not m.is_dir():
                     with z.open(m) as src, open(os.path.join(out, name), "wb") as dst:
                         dst.write(src.read())
         path = out
     found = {}
     for root, _, files in os.walk(path):
         for f in files:
-            if f.endswith(".log"):
+            if is_log(f):
                 found.setdefault(f, os.path.join(root, f))
     return found
 
@@ -62,7 +69,8 @@ def open_logs(path):
 def lines(logs, *names):
     for n in names:
         if n in logs:
-            with open(logs[n], encoding="utf-8-sig", errors="replace") as f:
+            opener = gzip.open if n.endswith(".gz") else open
+            with opener(logs[n], "rt", encoding="utf-8-sig", errors="replace") as f:
                 for l in f:
                     yield l.rstrip("\n")
 
@@ -74,6 +82,14 @@ def fms_advisories_vt(v):
 def ip_of(text):
     m = re.search(r"[\[(]" + IP + r"[\])]", text)
     return m.group(1) if m else None
+
+
+def hide_typed_password(name):
+    """People type passwords into the account box. Don't copy one into a report."""
+    if re.search(r"[^\w .@'-]", name) or (len(name) >= 8 and re.search(r"[a-z]", name)
+                                          and re.search(r"[A-Z]", name) and re.search(r"\d", name)):
+        return "<hidden: may be a typed password>"
+    return name
 
 
 def main():
@@ -91,11 +107,28 @@ def main():
     # Access log: who connected, and which addresses are new
     seen_before = set()
     after = collections.defaultdict(lambda: dict(n=0, pc=set(), app=set(), acct=set(), first=None, last=None))
-    succeeded = set()
+    signins = collections.defaultdict(list)   # address -> (time, account, connection type), at any date
+    xdbc = collections.defaultdict(lambda: dict(n=0, acct=set(), first=None, last=None))
+    via, access_first = {}, None
     for l in lines(logs, "Access-old.log", "Access.log"):
         ts, ip = l[:16], ip_of(l)
         if not ip or not ts[:4].isdigit():
             continue
+        access_first = access_first or ts
+        m = re.search(r'opening a connection from .*using "([^"]+)"', l)
+        if m:
+            via[ip] = m.group(1)
+            if ts >= since and re.search(r"JDBC|ODBC|fmxdbc", m.group(1), re.I):
+                x = xdbc[ip]
+                x["n"] += 1
+                x["first"] = x["first"] or ts
+                x["last"] = ts
+                c = re.search(r'Client "([^"]*)"', l)
+                if c:
+                    x["acct"].add(c.group(1))
+        m = re.search(r'opening database .* as "([^"]*)"', l)
+        if m:
+            signins[ip].append((ts, m.group(1), via.get(ip, "")))
         if ts < since:
             seen_before.add(ip)
             continue
@@ -107,11 +140,9 @@ def main():
             m = re.search(pat, l)
             if m:
                 r[key].add(m.group(1).split("@")[0])
-        if "opening database" in l:
-            succeeded.add(ip)
 
     # Event log: addresses seen before the window also count as known
-    for l in lines(logs, "Event.log"):
+    for l in lines(logs, "Event-old.log", "Event.log"):
         if l[:16] < since and l[:4].isdigit():
             ip = ip_of(l)
             if ip and ("connected" in l or "opening" in l):
@@ -139,15 +170,18 @@ def main():
         print(f"{flag}{ip:40} n={r['n']:<6} {r['first']}..{r['last'][5:]} pc={sorted(r['pc'])[:3]} "
               f"app={sorted(r['app'])[:2]} acct={sorted(r['acct'])[:5]}")
 
-    fails = collections.defaultdict(lambda: dict(n=0, xdbc=0, acct=set(), files=set(), chan=set()))
+    fails = collections.defaultdict(lambda: dict(n=0, xdbc=0, acct=set(), files=set(), chan=set(), first=None,
+                                                 windows=collections.Counter()))
     admin, admin_fail, other = collections.Counter(), collections.Counter(), collections.Counter()
-    for l in lines(logs, "Event.log"):
+    for l in lines(logs, "Event-old.log", "Event.log"):
         if l[:16] < since or not l[:4].isdigit():
             continue
         msg = l.split("\t", 4)[-1]
         if "authentication failed on database" in msg:
             r = fails[ip_of(msg) or "?"]
             r["n"] += 1
+            r["first"] = r["first"] or l[:16]
+            r["windows"][l[:15]] += 1
             m = re.search(r'on database "([^"]+)" using "(?:([^"]*?) )?\[(\w+)\]"', msg)
             if m:
                 r["files"].add(m.group(1))
@@ -167,25 +201,55 @@ def main():
             other[re.sub(r"\d", "#", msg)[:150]] += 1
 
     print(f"\n## Failed FileMaker sign-ins: {sum(r['n'] for r in fails.values())} from {len(fails)} addresses")
-    print("   Flags: NEVER-SUCCEEDED, MANY-ACCOUNTS (3+), MANY-FILES (3+), GENERIC/DEFAULT account, XDBC (ODBC/JDBC, port 2399)")
-    xdbc = {ip: r["xdbc"] for ip, r in fails.items() if r["xdbc"]}
-    if xdbc:
-        print(f"   ODBC/JDBC: {sum(xdbc.values())} of the failures came through port 2399, from {len(xdbc)} address(es).\n"
+    print(f"   Flags: POSSIBLE-COMPROMISE, SIGNED-IN, NEVER-SUCCEEDED, BEFORE-ACCESS-LOG, MANY-ACCOUNTS (3+), MANY-FILES (3+),\n"
+          f"   GENERIC/DEFAULT account, XDBC (ODBC/JDBC, port 2399), RATE ({FAIL_RATE}+ in 10 minutes), SERVER-ITSELF")
+    xdbc_fails = {ip: r["xdbc"] for ip, r in fails.items() if r["xdbc"]}
+    if xdbc_fails:
+        print(f"   ODBC/JDBC: {sum(xdbc_fails.values())} of the failures came through port 2399, from {len(xdbc_fails)} address(es).\n"
               "   The attacks use 2399 too; unless a known SQL or BI tool explains them, close 2399 or allow-list it")
+    typed = False
     for ip, r in sorted(fails.items(), key=lambda x: -x[1]["n"]):
-        flags = []
-        if ip not in seen_before and ip not in succeeded and ip not in LOCAL:
-            flags.append("NEVER-SUCCEEDED")
+        flags, peak = [], max(r["windows"].values())
+        ok = signins.get(ip, []) if ip not in LOCAL else []
+        accts = {a.lower() for a in r["acct"]}
+        if ip in LOCAL:
+            flags.append("SERVER-ITSELF")
+        if ok:
+            # A success counts before or after the failures. Show the sign-in that matters most.
+            risky = [s for s in ok if re.search(r"JDBC|ODBC|fmxdbc", s[2], re.I) or s[1].lower() in GENERIC]
+            when, who, how = (risky or ok)[0]
+            if risky or (is_new(ip) and len(r["acct"]) >= 3):
+                flags.append("POSSIBLE-COMPROMISE")
+            how = re.sub(r"\s*\[\w+\]$", "", how) or "?"
+            flags.append(f"SIGNED-IN as {hide_typed_password(who)} {when} via {how} ({len(ok)} sign-ins)")
+        elif ip not in seen_before and ip not in LOCAL:
+            # Without Access.log for that date, a success can't be ruled out
+            flags.append("BEFORE-ACCESS-LOG" if not access_first or r["first"] < access_first else "NEVER-SUCCEEDED")
         if len(r["acct"]) >= 3:
             flags.append("MANY-ACCOUNTS")
         if len(r["files"]) >= 3:
             flags.append("MANY-FILES")
-        if {a.lower() for a in r["acct"]} & GENERIC:
+        if accts & GENERIC:
             flags.append("GENERIC/DEFAULT")
         if r["xdbc"]:
             flags.append("XDBC")
-        print(f"  {ip:40} n={r['n']:<4} accts={sorted(r['acct'])[:5]} files={len(r['files'])} "
+        if peak >= FAIL_RATE and ip not in LOCAL:
+            flags.append("RATE")
+        shown = [hide_typed_password(a) for a in sorted(r["acct"])]
+        typed = typed or any(a.startswith("<hidden") for a in shown)
+        more = f" +{len(shown) - 12} more" if len(shown) > 12 else ""
+        print(f"  {ip:40} n={r['n']:<4} peak10={peak:<3} accts={len(shown)} {shown[:12]}{more} files={len(r['files'])} "
               f"via={sorted(r['chan'])} {' '.join(flags)}")
+    if typed:
+        print("   An account name above looks like a typed password. It's hidden here and stays in the log:\n"
+              "   have the person change that password, and don't copy that log line into a report")
+    if not access_first:
+        print("   Access.log has no dated lines, so no address can be said to have never signed in")
+
+    print(f"\n## ODBC/JDBC connections (Access.log): {sum(x['n'] for x in xdbc.values())} from {len(xdbc)} addresses")
+    for ip, x in sorted(xdbc.items(), key=lambda i: -i[1]["n"]):
+        flag = ("  NEW" if is_new(ip) else "") + ("  GENERIC" if {a.lower() for a in x["acct"]} & GENERIC else "")
+        print(f"  {ip:40} n={x['n']:<5} {x['first']}..{x['last'][5:]} accts={sorted(x['acct'])[:8]}{flag}")
 
     # Client versions: which FileMaker Pro and Go builds connected, matched against the
     # skill's bundled FileMaker Pro advisories (no network; fms_advisories.py has the live list)
@@ -266,9 +330,11 @@ def main():
                 flags.append("GUEST/GENERIC")
             print(f"  {win} {who[:50]:50} reads={r['n']:<4} MB={r['mb']:<6.1f} tables={len(r['tables']):<3} {' '.join(flags)}")
 
-    ng = [p for p in (l.split("\t") for l in lines(logs, "nginx-access.log")) if len(p) >= 7]
+    rotated = sorted(n for n in logs if n.startswith("nginx-access.log-"))
+    ng = [p for p in (l.split("\t") for l in lines(logs, *rotated, "nginx-access.log")) if len(p) >= 7]
     if not ng:
-        print("\n## Web server (nginx-access.log): not supplied")
+        print("\n## Web server (nginx-access.log): not supplied. This check reads nginx only:\n"
+              "   read an IIS or Apache log by hand for /fmi/ paths and any .php page that answered")
         return
     print(f"\n## Web server (nginx-access.log): {len(ng)} requests, {ng[0][2][:16]} .. {ng[-1][2][:16]}")
     print("  status:", collections.Counter(p[4] for p in ng).most_common())
@@ -280,13 +346,21 @@ def main():
         print(f"    {n:4} {k}")
     print("  busiest addresses:", collections.Counter(p[0] for p in ng).most_common(10))
 
-    # Data API and OData record reads, per address per 10 minutes (the Claris pattern:
+    # PHP and XML. Scanners ask for .php pages on every server, so 404s are noise; a page that answered is not.
+    phpxml = [p for p in ng if re.search(r"\.php\b|/fmi/xml|/fmi/php|/fmi-test|fmresultset|FMPXMLRESULT", p[3], re.I)]
+    print(f"  PHP and XML requests: {len(phpxml)}, by status {collections.Counter(p[4] for p in phpxml).most_common()}")
+    answered = collections.Counter((p[0], re.sub(r"\?.*", "", p[3].split(" ")[1]) if " " in p[3] else p[3], p[4])
+                                   for p in phpxml if p[4].startswith("2"))
+    for (ip, path, status), n in answered.most_common(15):
+        print(f"    ANSWERED {n:4} {ip:40} {path} {status}")
+
+    # Data API, OData and XML record reads, per address per 10 minutes (the Claris pattern:
     # many 200-record pages pulled from many layouts in a short time)
     # Only answered calls (2xx) returned records; refused ones (401, 403...) are counted apart.
     api = collections.defaultdict(lambda: dict(n=0, layouts=set()))
     refused = collections.Counter()
     for p in ng:
-        m = re.search(r"/fmi/(?:data/[^/]+/databases/([^/]+)/layouts/([^/?]+)/(?:records|_find)|odata/v\d+/([^/?]+)/([^/?(]+))", p[3])
+        m = re.search(r"/fmi/(?:data/[^/]+/databases/([^/]+)/layouts/([^/?]+)/(?:records|_find)|odata/v\d+/([^/?]+)/([^/?(]+)|xml/\w+\.xml\?(?=.*-db=([^&\s]+))(?=.*-lay=([^&\s]+)))", p[3])
         if not m:
             continue
         if not p[4].startswith("2"):
@@ -295,7 +369,7 @@ def main():
         r = api[(p[0], p[2][:15] + "0")]
         r["n"] += 1
         r["layouts"].add("/".join(x for x in m.groups() if x))
-    print(f"  Data API / OData record calls answered: {sum(r['n'] for r in api.values())}")
+    print(f"  Data API, OData and XML record calls answered: {sum(r['n'] for r in api.values())}")
     if refused:
         print("  Refused record calls (no records returned): "
               + ", ".join(f"{ip} {status} x{n}" for (ip, status), n in refused.most_common(10)))
