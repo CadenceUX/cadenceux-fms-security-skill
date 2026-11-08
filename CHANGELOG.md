@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.2.2] — 2026-11-08
+
+Two more checks Claris's Security Guide recommends, and a way for a program that has already signed
+in to run the settings review. Tested in scans of three servers on 8 November 2026.
+
+### Added
+
+- `scripts/fms_exposure_check.py`: an `HSTS (443)` line from the `Strict-Transport-Security`
+  header, and an `Old TLS (443)` line from one TLS 1.0 and one TLS 1.1 handshake. A version the
+  scanning Mac can't offer is reported as not tested, so macOS's own Python (LibreSSL) and newer
+  OpenSSL both give a true answer.
+- `scripts/fms_admin_review.py`: a Perform Script on Server check (script sessions above 0 is to
+  review), and `--token-stdin`, which reads an Admin API token from stdin, skips the sign-in and
+  sign-out, and runs the same GET-only checks. The checks are now in `review(api)`.
+
+### Fixed
+
+- `scripts/fms_admin_review.py`: a connection error on one endpoint is reported as not read,
+  instead of stopping the review.
+
 ## [1.2.1] — 2026-11-03
 
 Wording corrections in the changelog and eval notes. No change to the checks.

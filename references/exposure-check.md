@@ -70,13 +70,18 @@ on the machine that installed it and untrusted everywhere else: fine for a local
 a finding on anything others connect to. Port 80 should answer only with a redirect to HTTPS. Production needs a trusted certificate; importing a
 custom certificate also turns on HSTS. Note the expiry date in the report.
 
+The check also reads the `Strict-Transport-Security` header (HSTS), and tries one TLS 1.0 and one
+TLS 1.1 handshake on 443. Claris's Security Guide asks for current TLS only. A version the
+scanning Mac's own TLS library can't offer is reported as not tested, never as refused, and a
+server that closes the connection is reported as that, not as a clear refusal.
+
 ## Severity
 
 | Severity | Examples |
 |---|---|
 | Critical | File names listed without sign-in on a server whose files use Guest or auto-login; local-only ports open |
-| High | Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; PHP answering from outside; remote management ports open; default certificate |
-| Medium | Data API, OData, XML or WebDirect answering when unused; 443 or 5003 not allow-listed where clients are known |
+| High | HTTPS accepts TLS 1.0 or 1.1; Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; PHP answering from outside; remote management ports open; default certificate |
+| Medium | HSTS off; Data API, OData, XML or WebDirect answering when unused; 443 or 5003 not allow-listed where clients are known |
 | Low | Default FileMaker Server web page |
 
 ## If the script can't be run

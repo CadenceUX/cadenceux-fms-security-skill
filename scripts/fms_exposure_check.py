@@ -102,6 +102,52 @@ def certificate(host):
         return f"could not read ({e})"
 
 
+def hsts(host):
+    """Whether HTTPS answers with Strict-Transport-Security. Claris turns it on with a custom certificate."""
+    try:
+        conn = http.client.HTTPSConnection(host, 443, timeout=TIMEOUT, context=ssl.create_default_context())
+        conn.request("GET", "/", headers={"User-Agent": "fms-exposure-check"})
+        r = conn.getresponse()
+        value = r.getheader("Strict-Transport-Security")
+        r.read()
+        conn.close()
+    except (OSError, ssl.SSLError, http.client.HTTPException) as e:
+        return f"could not read ({e})"
+    return f"on ({value})" if value else "OFF: no Strict-Transport-Security header  <-- turn on HSTS"
+
+
+def old_tls(host, port=443):
+    """Try one TLS 1.0 and one TLS 1.1 handshake. A server that accepts either lets a client be pushed to weak
+    encryption. A version this Mac's own TLS library can't offer is reported as not tested, never as refused."""
+    accepted, refused, dropped, untested = [], [], [], []
+    for name, version in (("1.0", ssl.TLSVersion.TLSv1), ("1.1", ssl.TLSVersion.TLSv1_1)):
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+        try:
+            # OpenSSL 3 and later refuse old TLS at the default security level; LibreSSL (macOS's own Python) has
+            # no levels, rejects the setting and offers old TLS anyway
+            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        except ssl.SSLError:
+            pass
+        try:
+            ctx.minimum_version = ctx.maximum_version = version
+        except (ValueError, ssl.SSLError):
+            untested.append(name)
+            continue
+        try:
+            with socket.create_connection((host, port), timeout=TIMEOUT) as s, ctx.wrap_socket(s, server_hostname=host):
+                accepted.append(name)
+        except ssl.SSLError as e:
+            (untested if "NO_PROTOCOLS_AVAILABLE" in str(e) or "no protocols available" in str(e) else refused).append(name)
+        except OSError:
+            dropped.append(name)   # the server closed the connection: most likely a refusal, but not a clear one
+    parts = ([f"ACCEPTS TLS {' and '.join(accepted)}"] if accepted else []) + \
+            ([f"refuses TLS {' and '.join(refused)}"] if refused else []) + \
+            ([f"closed the connection on TLS {' and '.join(dropped)}"] if dropped else []) + \
+            ([f"TLS {' and '.join(untested)} not tested (this Mac can't offer it)"] if untested else [])
+    return "; ".join(parts) + ("  <-- turn off TLS 1.0 and 1.1" if accepted else "")
+
+
 def server_header(headers):
     """The Server header, plus X-Powered-By when a page admits to PHP or anything else."""
     powered = headers.get("X-Powered-By", "")
@@ -176,6 +222,8 @@ def main():
 
     print(f"\n## HTTP (80): {http_redirect(host)}")
     print(f"## Certificate (443): {certificate(host)}")
+    print(f"## HSTS (443): {hsts(host)}")
+    print(f"## Old TLS (443): {old_tls(host)}")
     print("\n## Web paths (GET, no credentials)")
     for path, what in PATHS.items():
         status, server, body = fetch(host, path)

@@ -11,6 +11,8 @@ Usage:
 
     --insecure  accept an untrusted certificate (the default Claris test certificate,
                 or a self-signed one). The certificate is still reported as a finding.
+    --token-stdin  for a program that has already signed in: read its Admin API token from
+                stdin, skip the sign-in and sign-out, and only read settings.
 
 Needs FileMaker Server 21 or later (some checks need 21.0.1+) and Python 3, standard
 library only. Paste the output, not the password, back into the conversation.
@@ -72,7 +74,7 @@ class Api:
     def get(self, path):
         try:
             return self.call("GET", path)
-        except RuntimeError as e:
+        except (RuntimeError, OSError) as e:
             hint = "; this check may need a newer version" if "HTTP 404" in str(e) else ""
             print(f"  -      {path:14} not read ({e}){hint}")
             return None
@@ -96,18 +98,172 @@ def find_key(obj, pattern):
     return ""
 
 
+def find_value(obj, pattern):
+    """Return the first number, string or flag whose key matches pattern, searching nested objects, or None."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if re.search(pattern, k, re.I) and isinstance(v, (str, int, float, bool)):
+                return v
+        for v in obj.values():
+            found = find_value(v, pattern)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = find_value(v, pattern)
+            if found is not None:
+                return found
+    return None
+
+
 def version_tuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3])
+
+
+def review(api):
+    """Every settings check, read with GET requests only through a signed-in Api. Changes nothing."""
+    meta = api.get("/server/metadata") or {}
+    v = meta.get("serverVersion") or find_key(meta, r"version")
+    vt = version_tuple(v)
+    if not vt:
+        keys = sorted(meta) if isinstance(meta, dict) else type(meta).__name__
+        report("REVIEW", "Version", f"version not found in /server/metadata (keys: {keys}); "
+               "read it from the Admin Console dashboard")
+    elif vt[0] < OLDEST_SUPPORTED:
+        report("FAIL", "Version", f"{v}: older than FileMaker Server 2024 (21); upgrade")
+    elif vt[0] in LATEST and vt < LATEST[vt[0]]:
+        report("FAIL", "Version", f"{v}: behind {'.'.join(map(str, LATEST[vt[0]]))}, which fixes "
+               "published security issues")
+    else:
+        report("PASS", "Version", f"{v} (re-check the release notes for anything newer)")
+    if vt:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import fms_advisories
+            adv = fms_advisories.load_bundled()
+            hits = [e for e in adv["cves"] + adv["release_note_fixes"] if fms_advisories.affects(e, v)]
+            if hits:
+                worst = max((e["cvss"] or 0) for e in hits)
+                report("FAIL" if worst >= 7 else "REVIEW", "Advisories",
+                       f"{len(hits)} published issue(s) affect {v} (highest CVSS {worst or '-'}); details: "
+                       f"python3 fms_advisories.py {v}")
+        except (ImportError, SystemExit, OSError, KeyError):
+            pass
+
+    cert = (api.get("/server/certificate/info") or {}).get("certificate", {})
+    if "Claris" in cert.get("issuerName", "") or "Not for Production" in cert.get("subjectName", ""):
+        report("FAIL", "Certificate", "default Claris test certificate; install a trusted one")
+    elif re.search(r"mkcert|development", cert.get("issuerName", ""), re.I):
+        report("REVIEW", "Certificate", f"development CA ({cert.get('issuerName')}): trusted only on machines "
+               "that installed it; fine for a local test server, not for one others connect to")
+    elif cert:
+        report("PASS", "Certificate", f"issued by {cert.get('issuerName')}")
+
+    sec = api.get("/server/config/security") or {}
+    if "requireSecureDB" in sec:
+        report("PASS" if sec["requireSecureDB"] else "FAIL", "Secure files",
+               "only password-protected files can be hosted" if sec["requireSecureDB"] else
+               "files with Guest [Full Access], blank or stored full-access passwords can be hosted")
+
+    ra = api.get("/server/restrictaccess") or {}
+    if "restrictIPEnabled" in ra:
+        ips = [x for x in re.split(r"[,\s]+", ra.get("restrictIPList", "")) if x]
+        report("PASS" if ra["restrictIPEnabled"] else "FAIL", "Admin access",
+               f"Admin Console restricted to {len(ips)} address(es)" if ra["restrictIPEnabled"] else
+               "Admin Console reachable from any address")
+
+    vis = api.get("/fmclients/databasevisibility") or {}
+    if "databaseVisibility" in vis:
+        report("PASS" if vis["databaseVisibility"] else "FAIL", "Filter files",
+               "Filter databases in client applications is on" if vis["databaseVisibility"] else
+               "hosted file list shown to anyone who connects")
+
+    bnu = api.get("/server/config/blocknewusers") or {}
+    if bnu.get("blockNewUsers"):
+        report("INFO", "Block users", "Block New Users is ON: new connections are refused")
+
+    on, unread = [], []
+    for path, name in (("/fmdapi/config", "Data API"), ("/fmodata/config", "OData"),
+                       ("/xdbc/config", "ODBC/JDBC"), ("/webdirect/config", "WebDirect"),
+                       ("/xml/config", "XML"), ("/php/config", "PHP")):
+        cfg = api.get(path)
+        if cfg is None:
+            unread.append(name)   # not read is not the same as off
+        elif cfg.get("enabled"):
+            on.append(name)
+    report("REVIEW" if on else "PASS", "Services",
+           f"enabled: {', '.join(on)}; turn off any not in use" if on else "no web or SQL services enabled")
+    if unread:
+        report("REVIEW", "Services", f"couldn't read {', '.join(unread)}: check them in the Admin Console")
+    if "PHP" in on:
+        report("REVIEW", "PHP", "PHP publishing is ON: find the engine's version with php -v on the server, "
+               "patch it or remove it, and turn it off if unused")
+    elif "PHP" not in unread:
+        report("INFO", "PHP", "PHP publishing is off. That doesn't show whether a PHP engine is on the machine: "
+               "run php -v on the server")
+
+    dbs = (api.get("/databases") or {}).get("databases", [])
+    for d in dbs:
+        name = d.get("filename", "?")
+        risky = [RISKY_EXTPRIV[p] for p in d.get("enabledExtPrivileges", []) if p in RISKY_EXTPRIV]
+        if risky:
+            report("REVIEW", "File access", f"{name}: {', '.join(risky)} access enabled in at least one "
+                   "privilege set; confirm each is needed")
+        if d.get("isEncrypted") is False:
+            report("REVIEW", "Encryption", f"{name}: not encrypted at rest")
+    if not dbs:
+        report("INFO", "Files", "no hosted files reported")
+
+    for c in (api.get("/clients") or {}).get("clients", []):
+        for g in c.get("guestFiles", []):
+            acct = (g.get("accountName") or "").lower()
+            if acct in GENERIC:
+                report("FAIL" if "guest" in acct else "REVIEW", "Connected now",
+                       f"{c.get('ipaddress')} has {g.get('filename')} open as '{g.get('accountName')}'")
+
+    roles = api.get("/server/adminrole")
+    if isinstance(roles, list) or isinstance(roles, dict):
+        n = len(roles if isinstance(roles, list) else roles.get("adminRoles", roles.get("roles", [])))
+        report("PASS" if n else "REVIEW", "Admin roles",
+               f"{n} administrator role(s) defined" if n else
+               "no administrator roles: everyone shares the one Admin Console account")
+
+    sch = (api.get("/schedules") or {}).get("schedules", [])
+    enabled = [s.get("name") for s in sch if s.get("enabled")]
+    if enabled:
+        report("INFO", "Schedules", f"{len(enabled)} enabled: {', '.join(map(str, enabled[:10]))}; "
+               "confirm each is expected")
+    plugins = [p.get("pluginName") or p.get("filename") for p in
+               (api.get("/plugins") or {}).get("plugins", []) if p.get("enabled")]
+    if plugins:
+        report("INFO", "Plug-ins", f"enabled: {', '.join(map(str, plugins))}")
+
+    # Perform Script on Server: Claris says set script sessions to 0 unless the solution uses it
+    general = api.get("/server/config/general") or {}
+    psos = find_value(general, r"psos|scriptsession")
+    if psos is not None:
+        report("PASS" if str(psos) == "0" else "REVIEW", "Server scripts",
+               "Perform Script on Server is off (0 script sessions)" if str(psos) == "0" else
+               f"Perform Script on Server allows {psos} script sessions: set it to 0 unless the solution uses it")
 
 
 def main():
     if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
         sys.exit(__doc__)
+    host = sys.argv[1].replace("https://", "").strip("/")
+    api = Api(host, "--insecure" in sys.argv)
+    if "--token-stdin" in sys.argv:
+        # A program that has already signed in, such as the fms-security runner, passes its Admin API token on
+        # stdin, never as an argument. It signs out itself, so this run doesn't.
+        api.token = sys.stdin.readline().strip()
+        if not api.token:
+            sys.exit("--token-stdin needs the token on stdin")
+        print(f"##### FMS admin review: {host}\n")
+        review(api)
+        return
     if not sys.stdin.isatty():
         sys.exit("Run this in your own terminal: it asks for the Admin Console password and must not "
                  "be given one by another program.")
-    host = sys.argv[1].replace("https://", "").strip("/")
-    api = Api(host, "--insecure" in sys.argv)
     user = input("Admin Console account: ")
     pw = getpass.getpass("Password (not shown): ")
     basic = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
@@ -122,121 +278,7 @@ def main():
 
     try:
         print(f"##### FMS admin review: {host}\n")
-        meta = api.get("/server/metadata") or {}
-        v = meta.get("serverVersion") or find_key(meta, r"version")
-        vt = version_tuple(v)
-        if not vt:
-            keys = sorted(meta) if isinstance(meta, dict) else type(meta).__name__
-            report("REVIEW", "Version", f"version not found in /server/metadata (keys: {keys}); "
-                   "read it from the Admin Console dashboard")
-        elif vt[0] < OLDEST_SUPPORTED:
-            report("FAIL", "Version", f"{v}: older than FileMaker Server 2024 (21); upgrade")
-        elif vt[0] in LATEST and vt < LATEST[vt[0]]:
-            report("FAIL", "Version", f"{v}: behind {'.'.join(map(str, LATEST[vt[0]]))}, which fixes "
-                   "published security issues")
-        else:
-            report("PASS", "Version", f"{v} (re-check the release notes for anything newer)")
-        if vt:
-            try:
-                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-                import fms_advisories
-                adv = fms_advisories.load_bundled()
-                hits = [e for e in adv["cves"] + adv["release_note_fixes"] if fms_advisories.affects(e, v)]
-                if hits:
-                    worst = max((e["cvss"] or 0) for e in hits)
-                    report("FAIL" if worst >= 7 else "REVIEW", "Advisories",
-                           f"{len(hits)} published issue(s) affect {v} (highest CVSS {worst or '-'}); details: "
-                           f"python3 fms_advisories.py {v}")
-            except (ImportError, SystemExit, OSError, KeyError):
-                pass
-
-        cert = (api.get("/server/certificate/info") or {}).get("certificate", {})
-        if "Claris" in cert.get("issuerName", "") or "Not for Production" in cert.get("subjectName", ""):
-            report("FAIL", "Certificate", "default Claris test certificate; install a trusted one")
-        elif re.search(r"mkcert|development", cert.get("issuerName", ""), re.I):
-            report("REVIEW", "Certificate", f"development CA ({cert.get('issuerName')}): trusted only on machines "
-                   "that installed it; fine for a local test server, not for one others connect to")
-        elif cert:
-            report("PASS", "Certificate", f"issued by {cert.get('issuerName')}")
-
-        sec = api.get("/server/config/security") or {}
-        if "requireSecureDB" in sec:
-            report("PASS" if sec["requireSecureDB"] else "FAIL", "Secure files",
-                   "only password-protected files can be hosted" if sec["requireSecureDB"] else
-                   "files with Guest [Full Access], blank or stored full-access passwords can be hosted")
-
-        ra = api.get("/server/restrictaccess") or {}
-        if "restrictIPEnabled" in ra:
-            ips = [x for x in re.split(r"[,\s]+", ra.get("restrictIPList", "")) if x]
-            report("PASS" if ra["restrictIPEnabled"] else "FAIL", "Admin access",
-                   f"Admin Console restricted to {len(ips)} address(es)" if ra["restrictIPEnabled"] else
-                   "Admin Console reachable from any address")
-
-        vis = api.get("/fmclients/databasevisibility") or {}
-        if "databaseVisibility" in vis:
-            report("PASS" if vis["databaseVisibility"] else "FAIL", "Filter files",
-                   "Filter databases in client applications is on" if vis["databaseVisibility"] else
-                   "hosted file list shown to anyone who connects")
-
-        bnu = api.get("/server/config/blocknewusers") or {}
-        if bnu.get("blockNewUsers"):
-            report("INFO", "Block users", "Block New Users is ON: new connections are refused")
-
-        on, unread = [], []
-        for path, name in (("/fmdapi/config", "Data API"), ("/fmodata/config", "OData"),
-                           ("/xdbc/config", "ODBC/JDBC"), ("/webdirect/config", "WebDirect"),
-                           ("/xml/config", "XML"), ("/php/config", "PHP")):
-            cfg = api.get(path)
-            if cfg is None:
-                unread.append(name)   # not read is not the same as off
-            elif cfg.get("enabled"):
-                on.append(name)
-        report("REVIEW" if on else "PASS", "Services",
-               f"enabled: {', '.join(on)}; turn off any not in use" if on else "no web or SQL services enabled")
-        if unread:
-            report("REVIEW", "Services", f"couldn't read {', '.join(unread)}: check them in the Admin Console")
-        if "PHP" in on:
-            report("REVIEW", "PHP", "PHP publishing is ON: find the engine's version with php -v on the server, "
-                   "patch it or remove it, and turn it off if unused")
-        elif "PHP" not in unread:
-            report("INFO", "PHP", "PHP publishing is off. That doesn't show whether a PHP engine is on the machine: "
-                   "run php -v on the server")
-
-        dbs = (api.get("/databases") or {}).get("databases", [])
-        for d in dbs:
-            name = d.get("filename", "?")
-            risky = [RISKY_EXTPRIV[p] for p in d.get("enabledExtPrivileges", []) if p in RISKY_EXTPRIV]
-            if risky:
-                report("REVIEW", "File access", f"{name}: {', '.join(risky)} access enabled in at least one "
-                       "privilege set; confirm each is needed")
-            if d.get("isEncrypted") is False:
-                report("REVIEW", "Encryption", f"{name}: not encrypted at rest")
-        if not dbs:
-            report("INFO", "Files", "no hosted files reported")
-
-        for c in (api.get("/clients") or {}).get("clients", []):
-            for g in c.get("guestFiles", []):
-                acct = (g.get("accountName") or "").lower()
-                if acct in GENERIC:
-                    report("FAIL" if "guest" in acct else "REVIEW", "Connected now",
-                           f"{c.get('ipaddress')} has {g.get('filename')} open as '{g.get('accountName')}'")
-
-        roles = api.get("/server/adminrole")
-        if isinstance(roles, list) or isinstance(roles, dict):
-            n = len(roles if isinstance(roles, list) else roles.get("adminRoles", roles.get("roles", [])))
-            report("PASS" if n else "REVIEW", "Admin roles",
-                   f"{n} administrator role(s) defined" if n else
-                   "no administrator roles: everyone shares the one Admin Console account")
-
-        sch = (api.get("/schedules") or {}).get("schedules", [])
-        enabled = [s.get("name") for s in sch if s.get("enabled")]
-        if enabled:
-            report("INFO", "Schedules", f"{len(enabled)} enabled: {', '.join(map(str, enabled[:10]))}; "
-                   "confirm each is expected")
-        plugins = [p.get("pluginName") or p.get("filename") for p in
-                   (api.get("/plugins") or {}).get("plugins", []) if p.get("enabled")]
-        if plugins:
-            report("INFO", "Plug-ins", f"enabled: {', '.join(map(str, plugins))}")
+        review(api)
     finally:
         try:
             api.call("DELETE", f"/user/auth/{api.token}")

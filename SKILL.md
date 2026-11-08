@@ -20,7 +20,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADT is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.2.1"
+  version: "1.2.2"
 ---
 
 # FileMaker Server security check
@@ -202,8 +202,8 @@ Windows install it from python.org).
 |---|---|
 | `scripts/fms_advisories.py` | Fetches FileMaker CVEs live from NVD (one request), merges Claris release-note fixes from `references/advisories.json`, and lists every published issue a given FileMaker Server version (or FileMaker Pro version, with `--pro`) is exposed to. Falls back to the bundled list offline and says how old it is |
 | `scripts/fms_file_audit.py` | Reads Save a Copy as XML exports, no server connection: Guest, auto-login, generic and [Full Access] accounts, extended privileges, Encryption at Rest, reference protection, passwords typed into scripts, credentials in Insert from URL. Never prints hashes or script text |
-| `scripts/fms_admin_review.py` | Run **by the user** in their own terminal: signs in to the Admin API, reads version, certificate, secure-files, Admin Console restriction, Filter databases, services, per-file API privileges and encryption, connected Guest sessions, admin roles, schedules and plug-ins (GET only), signs out |
-| `scripts/fms_exposure_check.py` | TCP connect to FileMaker and admin ports, HTTP-to-HTTPS redirect and TLS certificate checks, unauthenticated GET of the FileMaker web paths. Reports open ports, file lists shown before sign-in, the default web page, services answering, and XML or PHP publishing that answers |
+| `scripts/fms_admin_review.py` | Run **by the user** in their own terminal: signs in to the Admin API, reads version, certificate, secure-files, Admin Console restriction, Filter databases, services, per-file API privileges and encryption, connected Guest sessions, admin roles, schedules, plug-ins and Perform Script on Server sessions (GET only), signs out. A program that has already signed in can pass its token with `--token-stdin` instead, and signs out itself |
+| `scripts/fms_exposure_check.py` | TCP connect to FileMaker and admin ports, HTTP-to-HTTPS redirect, TLS certificate, HSTS and old TLS (1.0 and 1.1) checks, unauthenticated GET of the FileMaker web paths. Reports open ports, file lists shown before sign-in, the default web page, services answering, and XML or PHP publishing that answers |
 | `scripts/fms_logcheck.py` | Reads a Logs folder or zip: new addresses, FileMaker Pro/Go client builds with published issues, flagged failed sign-ins, addresses that failed and also signed in, ODBC/JDBC connections, admin sign-ins, settings and file events, Admin API errors, record download bursts, web-server requests |
 
 Without code execution, give the user the command for each script and ask them to paste the
