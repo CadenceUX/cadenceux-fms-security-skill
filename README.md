@@ -27,15 +27,19 @@ When this skill is active, Claude will:
 - Confirm you're authorised to test the server, and record which services are meant to be used
 - Ask for the data owner's recovery expectations: whether there's a Disaster Recovery (DR) plan,
   how much data they could lose, and how long the server could be down
-- Check from outside your network which ports answer, whether the TLS certificate is trusted,
-  and which FileMaker web paths respond without signing in, including whether the hosted file
-  list is shown to anyone, and whether XML or PHP publishing answers (`scripts/fms_exposure_check.py`)
+- Run every automated check in one command (`scripts/fms_scan.py`) and read a short summary, so a
+  scan uses far less of your usage limit
+- Check from outside your network which ports answer (82, FileMaker's and the common services on
+  Mac, Windows and Unix servers), what each one gives away before sign-in, whether the TLS
+  certificate is trusted, and which FileMaker web paths respond without signing in, including
+  whether the hosted file list is shown to anyone (`scripts/fms_exposure_check.py`)
 - Walk you through the Admin Console settings that matter, one area at a time, and judge the
   backups against those expectations: how often they run, a copy beyond the server's network,
   and a timed test restore
 - Check your FileMaker Server version, and the FileMaker Pro builds that connect to it, against
-  published CVEs and Claris's release-note security fixes, fetched live from NVD at the start of each session, with a dated built-in
-  list as the fallback (`scripts/fms_advisories.py`)
+  published CVEs and Claris's release-note security fixes, fetched live from NVD, with a dated built-in
+  list as the fallback, and the services it shows (OpenSSH, nginx, Apache and others) and its
+  operating system against their published issues and support dates
 - Audit every hosted file from its Save a Copy as XML export: Guest, auto-login, default and
   generic accounts, extended privileges, Encryption at Rest, reference protection, and passwords
   typed into scripts (`scripts/fms_file_audit.py`). No extra tools needed; Claris ADT, if you
@@ -64,7 +68,7 @@ When this skill is active, Claude will:
   blank-password check.
 
 In Claude Code, Claude runs the scripts. In Claude.ai or Claude Desktop, Claude gives you the
-commands and reads the output you paste back. The admin review always runs in your own terminal,
+command and reads the short summary and draft report it saves. A scan runs well on Sonnet. The admin review always runs in your own terminal,
 because it asks for the Admin Console password. Run the exposure check from outside the server's
 network.
 

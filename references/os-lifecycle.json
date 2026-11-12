@@ -1,0 +1,33 @@
+{
+ "checked": "2026-11-12",
+ "notes": "When each operating system release stops getting security fixes. A release past its end is a finding whatever else the scan shows. Dates are the vendor's; month-only dates are the vendor's published month. Re-check on each skill release.",
+ "sources": [
+  "https://learn.microsoft.com/en-us/lifecycle/products/",
+  "https://ubuntu.com/about/release-cycle",
+  "https://wiki.debian.org/DebianReleases"
+ ],
+ "windows": [
+  {"name": "Windows Server 2008 R2 or Windows 7", "version": "6.1", "builds": [7600, 7601], "ends": "2020-01-14"},
+  {"name": "Windows Server 2012 or Windows 8", "version": "6.2", "builds": [9200, 9200], "ends": "2023-10-10"},
+  {"name": "Windows Server 2012 R2 or Windows 8.1", "version": "6.3", "builds": [9600, 9600], "ends": "2023-10-10"},
+  {"name": "Windows Server 2016 or Windows 10 1607", "version": "10.0", "builds": [14393, 14393], "ends": "2027-01-12"},
+  {"name": "Windows Server 2019 or Windows 10 1809", "version": "10.0", "builds": [17763, 17763], "ends": "2029-01-09"},
+  {"name": "Windows 10", "version": "10.0", "builds": [18362, 19045], "ends": "2025-10-14"},
+  {"name": "Windows Server 2022", "version": "10.0", "builds": [20348, 20348], "ends": "2031-10-14"},
+  {"name": "Windows 11 (21H2 to 23H2)", "version": "10.0", "builds": [22000, 22631], "ends": ""},
+  {"name": "Windows Server 2025 or Windows 11 24H2", "version": "10.0", "builds": [26100, 26100], "ends": "2034-11-14"},
+  {"name": "Windows 11 25H2", "version": "10.0", "builds": [26200, 26200], "ends": ""}
+ ],
+ "ubuntu": [
+  {"release": "18.04", "codename": "bionic", "standard_ends": "2023-05", "esm_ends": "2028-04"},
+  {"release": "20.04", "codename": "focal", "standard_ends": "2025-05", "esm_ends": "2030-04"},
+  {"release": "22.04", "codename": "jammy", "standard_ends": "2027-06", "esm_ends": "2032-04"},
+  {"release": "24.04", "codename": "noble", "standard_ends": "2029-06", "esm_ends": "2034-04"}
+ ],
+ "debian": [
+  {"release": "10", "codename": "buster", "security_ends": "2022-09-10", "lts_ends": "2024-06-30"},
+  {"release": "11", "codename": "bullseye", "security_ends": "2024-08-14", "lts_ends": "2026-08-31"},
+  {"release": "12", "codename": "bookworm", "security_ends": "2026-07-11", "lts_ends": "2028-06-30"},
+  {"release": "13", "codename": "trixie", "security_ends": "", "lts_ends": ""}
+ ]
+}

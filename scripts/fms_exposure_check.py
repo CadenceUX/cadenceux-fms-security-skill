@@ -4,19 +4,32 @@
 Run it from OUTSIDE the server's network (home connection, phone hotspot, cloud
 shell), against a server you own or are authorised to test. It:
 
-  * tries a TCP connection to each FileMaker and common admin port
+  * tries a TCP connection to each port in references/ports.json: FileMaker's, then the
+    common services on Mac, Windows and Unix servers (remote access, file sharing,
+    databases, mail, admin panels)
   * reads the TLS certificate on 443 (issuer, expiry, name match)
   * requests the FileMaker web paths without credentials and reports the status,
     whether they return hosted file names, and whether port 80 redirects to HTTPS
+  * asks each open port what it is (fms_service_scan.py): the product and version a
+    service gives away before sign-in, and the operating system where one names it
+  * reads FileMaker Server's version from the Data API's product information, which
+    answers without sign-in when the Data API is on
 
 Read-only and polite: no passwords, no account names, no exploits, one request
-per path, a pause between connections. Uses only the Python standard library.
+per path, a pause between connections, at most a few connections at once. Uses
+only the Python standard library.
 
 Usage:
-    python3 fms_exposure_check.py <hostname> [--ports-only | --web-only]
+    python3 fms_exposure_check.py <hostname> [--ports-only | --web-only] [--services-json <path>]
+
+--services-json writes the services, the operating system and the FileMaker Server
+version as JSON, for fms_service_advisories.py.
 """
+import concurrent.futures
 import http.client
+import importlib.util
 import json
+import os
 import re
 import socket
 import ssl
@@ -27,37 +40,41 @@ import urllib.request
 
 TIMEOUT = 4       # seconds per connection; long enough for a distant server, short enough to finish quickly
 PAUSE = 0.3       # seconds between connections, so the check doesn't look like a flood to an IDS
+WORKERS = 8       # ports tried at once: a firewalled port waits the full TIMEOUT, so 80-odd one at a time would take minutes
+HERE = os.path.dirname(os.path.abspath(__file__))
+LIFECYCLE_FILE = os.path.join(HERE, "..", "references", "os-lifecycle.json")
 
-# port: (what uses it, whether it should answer from the internet). From Claris's
-# "Ports used by FileMaker Server" (installation guide and KB 000026067), checked 2026-10-31.
-PORTS = {
-    80: ("HTTP (should only redirect to HTTPS)", "ok"),
-    443: ("HTTPS: WebDirect, Data API, OData, XML, Admin Console, Admin API", "ok if used; restrict by IP where possible"),
-    5003: ("FileMaker Pro and Go clients", "ok if remote clients need it; restrict by IP or VPN where possible"),
-    2399: ("ODBC/JDBC", "close unless an external SQL client needs it"),
-    16000: ("Admin Console in 19.3 and earlier; secondary-machine traffic", "should be closed on 19.4+"),
-    16001: ("Admin Console, local only", "should be closed"),
-    16002: ("Admin server, local only from 19.5.1", "should be closed"),
-    16003: ("Web Publishing Engine (open only on a secondary machine, to the primary)", "should be closed"),
-    16004: ("Database Server, local only", "should be closed"),
-    1895: ("Database Server, local only", "should be closed"),
-    5013: ("Database Server, local only", "should be closed"),
-    8091: ("WebSocket tunnelling, local only (2024+)", "should be closed"),
-    50003: ("FileMaker Server service, local only", "should be closed"),
-    50004: ("FileMaker Script Engine, local only", "should be closed"),
-    3000: ("Web Publishing Engine, local only", "should be closed"),
-    8998: ("Web Publishing Engine, local only", "should be closed"),
-    9889: ("Web Publishing Engine, local only", "should be closed"),
-    9898: ("Web Publishing Engine, local only", "should be closed"),
-    16020: ("Web Publishing Engine, local only", "should be closed"),
-    16021: ("Web Publishing Engine, local only", "should be closed"),
-    10050: ("Zabbix monitoring agent", "close unless a monitoring server needs it, then restrict by IP"),
-    22: ("SSH", "close or restrict by IP"),
-    3389: ("Windows Remote Desktop", "close or restrict by IP or VPN"),
-    5900: ("macOS Screen Sharing / VNC", "close or restrict by IP or VPN"),
-    5985: ("Windows Remote Management (HTTP)", "should be closed"),
-    5986: ("Windows Remote Management (HTTPS)", "should be closed"),
-}
+
+def load_module(name):
+    """A sibling script, loaded by path: a program may start this one with python3 -I, which leaves its folder off sys.path."""
+    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_lifecycle():
+    try:
+        with open(LIFECYCLE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+# The ports to try, in order, from references/ports.json: port, group, what uses it, and whether it should
+# answer from the internet. The FileMaker ones are from Claris's "Ports used by FileMaker Server" (installation
+# guide and KB 000026067). The scanner file shows the same list, so the two can't drift apart.
+PORTS_FILE = os.path.join(HERE, "..", "references", "ports.json")
+
+
+def load_ports(path=PORTS_FILE):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return {p["port"]: (p["what"], p["expect"]) for p in json.load(f)["ports"]}
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        sys.exit(f"Can't read the port list at {path}: {e}")
+
+
+PORTS = load_ports()
 
 # path: what it is. Requested with GET and no credentials.
 PATHS = {
@@ -84,6 +101,22 @@ def tcp(host, port):
         return "closed"
     except OSError as e:
         return f"error ({e.strerror or e})"
+
+
+def probe(host, port):
+    state = tcp(host, port)
+    time.sleep(PAUSE)
+    return state
+
+
+def fms_version(body):
+    """FileMaker Server's version from the Data API's productInfo reply, or empty."""
+    try:
+        info = (json.loads(body).get("response") or {}).get("productInfo") or {}
+    except (ValueError, AttributeError):
+        return ""
+    v = str(info.get("version") or "")
+    return v if re.fullmatch(r"\d+(?:\.\d+){1,3}", v) else ""
 
 
 def certificate(host):
@@ -204,19 +237,26 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
         sys.exit(__doc__)
     host = sys.argv[1].replace("https://", "").replace("http://", "").strip("/")
-    mode = sys.argv[2] if len(sys.argv) > 2 else ""
+    args = sys.argv[2:]
+    mode = next((a for a in args if a in ("--ports-only", "--web-only")), "")
+    json_out = args[args.index("--services-json") + 1] if "--services-json" in args[:-1] else ""
     try:
         print(f"##### FMS exposure check: {host} ({socket.gethostbyname(host)})")
     except OSError as e:
         sys.exit(f"Cannot resolve {host}: {e}")
 
+    open_ports = []
     if mode != "--web-only":
         print("\n## Ports (TCP connect only)")
-        for port, (what, expect) in PORTS.items():
-            state = tcp(host, port)
-            flag = "  <-- review" if state == "OPEN" and expect.startswith(("should", "close")) else ""
-            print(f"  {port:<6} {state:10} {what}  [{expect}]{flag}")
-            time.sleep(PAUSE)
+        # A few at a time, printed in list order as each one's answer arrives
+        with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            tried = [(port, what, expect, pool.submit(probe, host, port)) for port, (what, expect) in PORTS.items()]
+            for port, what, expect, future in tried:
+                state = future.result()
+                flag = "  <-- review" if state == "OPEN" and expect.startswith(("should", "close")) else ""
+                print(f"  {port:<6} {state:10} {what}  [{expect}]{flag}", flush=True)
+                if state == "OPEN":
+                    open_ports.append(port)
     if mode == "--ports-only":
         return
 
@@ -225,8 +265,11 @@ def main():
     print(f"## HSTS (443): {hsts(host)}")
     print(f"## Old TLS (443): {old_tls(host)}")
     print("\n## Web paths (GET, no credentials)")
+    version = ""
     for path, what in PATHS.items():
         status, server, body = fetch(host, path)
+        if status == 200 and "productInfo" in path:
+            version = fms_version(body)
         names = file_names(path, body) if status == 200 else []
         note = ""
         xml_error = re.search(r'<error code="(\d+)"', body) if "-dbnames" in path else None
@@ -257,6 +300,37 @@ def main():
             php = "  <-- names PHP: patch or remove it" if re.search(r"X-Powered-By:.*PHP", server, re.I) else ""
             print(f"        Server header: {server}{php}")
         time.sleep(PAUSE)
+
+    print(f"\n## FileMaker Server version (no sign-in): "
+          + (f"{version} (from the Data API's product information)" if version else
+             "not shown (the Data API's product information has no version, as on FileMaker Server 26, or didn't answer)"))
+    services, system = [], {}
+    if mode != "--web-only":
+        svc, lifecycle = load_module("fms_service_scan"), load_lifecycle()
+        print("\n## Services (what each open port says, no sign-in)")
+        if not open_ports:
+            print("  no open ports to ask")
+        for port in open_ports:
+            found = svc.identify(host, port, PORTS[port][0], lifecycle)
+            for s in found if isinstance(found, list) else [found]:
+                services.append(s)
+                print(f"  {port:<6} {svc.describe(s)}", flush=True)
+            time.sleep(PAUSE)
+        system = svc.best_os(services)
+        if system["name"]:
+            line = svc.os_label(system["name"], system["release"])
+            print(f"\n## OS (from what the services say): {line} ({'; '.join(system['evidence'])})")
+            if not system["agree"]:
+                print(f"   Other services name {', '.join(system['others'])}: a forwarder, container or second machine may "
+                      "answer some ports")
+        else:
+            print("\n## OS (from what the services say): not identified (no open service names one)")
+    print("## Not visible from outside: the operating system's patch level, kernel bugs, and bugs that need a sign-in "
+          "first. Nobody outside can see these, attackers included; keep the server's own updates on.")
+    if json_out:
+        with open(json_out, "w", encoding="utf-8") as f:
+            json.dump({"host": host, "checked": time.strftime("%Y-%m-%d %H:%M:%S"), "fms_version": version,
+                       "services": services, "os": system, "open_ports": open_ports}, f, indent=1)
 
 
 if __name__ == "__main__":

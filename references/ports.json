@@ -1,0 +1,499 @@
+{
+ "checked": "2026-11-12",
+ "source": "FileMaker ports from Claris's \"Ports used by FileMaker Server\" (installation guide and KB 000026067), checked 2026-10-31; the rest are common services on Mac, Windows and Unix servers",
+ "notes": "Each scan tries every port here once, from outside, with a TCP connection only: no sign-in and nothing sent. An expectation that starts with \"should\" or \"close\" marks an open port for review. TCP only; UDP isn't checked.",
+ "ports": [
+  {
+   "port": 80,
+   "group": "FileMaker Server",
+   "what": "HTTP (should only redirect to HTTPS)",
+   "expect": "ok"
+  },
+  {
+   "port": 443,
+   "group": "FileMaker Server",
+   "what": "HTTPS: WebDirect, Data API, OData, XML, Admin Console, Admin API",
+   "expect": "ok if used; restrict by IP where possible"
+  },
+  {
+   "port": 5003,
+   "group": "FileMaker Server",
+   "what": "FileMaker Pro and Go clients",
+   "expect": "ok if remote clients need it; restrict by IP or VPN where possible"
+  },
+  {
+   "port": 2399,
+   "group": "FileMaker Server",
+   "what": "ODBC/JDBC",
+   "expect": "close unless an external SQL client needs it"
+  },
+  {
+   "port": 16000,
+   "group": "FileMaker Server",
+   "what": "Admin Console in 19.3 and earlier; secondary-machine traffic",
+   "expect": "should be closed on 19.4+"
+  },
+  {
+   "port": 16001,
+   "group": "FileMaker Server",
+   "what": "Admin Console, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 16002,
+   "group": "FileMaker Server",
+   "what": "Admin server, local only from 19.5.1",
+   "expect": "should be closed"
+  },
+  {
+   "port": 16003,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine (open only on a secondary machine, to the primary)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 16004,
+   "group": "FileMaker Server",
+   "what": "Database Server, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 1895,
+   "group": "FileMaker Server",
+   "what": "Database Server, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 5013,
+   "group": "FileMaker Server",
+   "what": "Database Server, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 8091,
+   "group": "FileMaker Server",
+   "what": "WebSocket tunnelling, local only (2024+)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 50003,
+   "group": "FileMaker Server",
+   "what": "FileMaker Server service, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 50004,
+   "group": "FileMaker Server",
+   "what": "FileMaker Script Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 3000,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 8998,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 9889,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 9898,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 16020,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 16021,
+   "group": "FileMaker Server",
+   "what": "Web Publishing Engine, local only",
+   "expect": "should be closed"
+  },
+  {
+   "port": 10050,
+   "group": "Containers and monitoring",
+   "what": "Zabbix monitoring agent",
+   "expect": "close unless a monitoring server needs it, then restrict by IP"
+  },
+  {
+   "port": 2375,
+   "group": "Containers and monitoring",
+   "what": "Docker API without TLS (anyone can run containers)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 2376,
+   "group": "Containers and monitoring",
+   "what": "Docker API with TLS",
+   "expect": "should be closed"
+  },
+  {
+   "port": 6443,
+   "group": "Containers and monitoring",
+   "what": "Kubernetes API",
+   "expect": "should be closed"
+  },
+  {
+   "port": 10250,
+   "group": "Containers and monitoring",
+   "what": "Kubernetes kubelet",
+   "expect": "should be closed"
+  },
+  {
+   "port": 5601,
+   "group": "Containers and monitoring",
+   "what": "Kibana",
+   "expect": "should be closed"
+  },
+  {
+   "port": 9100,
+   "group": "Containers and monitoring",
+   "what": "Prometheus node exporter or raw printing",
+   "expect": "should be closed"
+  },
+  {
+   "port": 10051,
+   "group": "Containers and monitoring",
+   "what": "Zabbix server",
+   "expect": "should be closed"
+  },
+  {
+   "port": 22,
+   "group": "Remote access",
+   "what": "SSH",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 3389,
+   "group": "Remote access",
+   "what": "Windows Remote Desktop",
+   "expect": "close or restrict by IP or VPN"
+  },
+  {
+   "port": 5900,
+   "group": "Remote access",
+   "what": "macOS Screen Sharing / VNC",
+   "expect": "close or restrict by IP or VPN"
+  },
+  {
+   "port": 5985,
+   "group": "Remote access",
+   "what": "Windows Remote Management (HTTP)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 5986,
+   "group": "Remote access",
+   "what": "Windows Remote Management (HTTPS)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 23,
+   "group": "Remote access",
+   "what": "Telnet (unencrypted remote sign-in)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 3283,
+   "group": "Remote access",
+   "what": "Apple Remote Desktop",
+   "expect": "close or restrict by IP or VPN"
+  },
+  {
+   "port": 5901,
+   "group": "Remote access",
+   "what": "VNC, second display",
+   "expect": "close or restrict by IP or VPN"
+  },
+  {
+   "port": 5902,
+   "group": "Remote access",
+   "what": "VNC, third display",
+   "expect": "close or restrict by IP or VPN"
+  },
+  {
+   "port": 5938,
+   "group": "Remote access",
+   "what": "TeamViewer",
+   "expect": "close unless TeamViewer is used, then restrict by IP"
+  },
+  {
+   "port": 21,
+   "group": "File sharing",
+   "what": "FTP (sends passwords unencrypted)",
+   "expect": "close; use SFTP or HTTPS instead"
+  },
+  {
+   "port": 111,
+   "group": "File sharing",
+   "what": "RPC portmapper (NFS on Unix)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 135,
+   "group": "File sharing",
+   "what": "Windows RPC",
+   "expect": "should be closed"
+  },
+  {
+   "port": 139,
+   "group": "File sharing",
+   "what": "NetBIOS (Windows file sharing)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 445,
+   "group": "File sharing",
+   "what": "SMB (Windows and macOS file sharing)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 548,
+   "group": "File sharing",
+   "what": "AFP (older Apple file sharing)",
+   "expect": "should be closed"
+  },
+  {
+   "port": 873,
+   "group": "File sharing",
+   "what": "rsync",
+   "expect": "should be closed"
+  },
+  {
+   "port": 2049,
+   "group": "File sharing",
+   "what": "NFS",
+   "expect": "should be closed"
+  },
+  {
+   "port": 1433,
+   "group": "Databases",
+   "what": "Microsoft SQL Server",
+   "expect": "should be closed"
+  },
+  {
+   "port": 1521,
+   "group": "Databases",
+   "what": "Oracle Database",
+   "expect": "should be closed"
+  },
+  {
+   "port": 3306,
+   "group": "Databases",
+   "what": "MySQL or MariaDB",
+   "expect": "should be closed"
+  },
+  {
+   "port": 5432,
+   "group": "Databases",
+   "what": "PostgreSQL",
+   "expect": "should be closed"
+  },
+  {
+   "port": 6379,
+   "group": "Databases",
+   "what": "Redis",
+   "expect": "should be closed"
+  },
+  {
+   "port": 9200,
+   "group": "Databases",
+   "what": "Elasticsearch",
+   "expect": "should be closed"
+  },
+  {
+   "port": 11211,
+   "group": "Databases",
+   "what": "Memcached",
+   "expect": "should be closed"
+  },
+  {
+   "port": 27017,
+   "group": "Databases",
+   "what": "MongoDB",
+   "expect": "should be closed"
+  },
+  {
+   "port": 25,
+   "group": "Mail",
+   "what": "SMTP (mail delivery)",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 110,
+   "group": "Mail",
+   "what": "POP3",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 143,
+   "group": "Mail",
+   "what": "IMAP",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 465,
+   "group": "Mail",
+   "what": "SMTP over TLS",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 587,
+   "group": "Mail",
+   "what": "SMTP submission",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 993,
+   "group": "Mail",
+   "what": "IMAP over TLS",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 995,
+   "group": "Mail",
+   "what": "POP3 over TLS",
+   "expect": "close unless this server handles mail"
+  },
+  {
+   "port": 53,
+   "group": "Directory and DNS",
+   "what": "DNS",
+   "expect": "close unless this server answers DNS for others"
+  },
+  {
+   "port": 389,
+   "group": "Directory and DNS",
+   "what": "LDAP directory",
+   "expect": "should be closed"
+  },
+  {
+   "port": 636,
+   "group": "Directory and DNS",
+   "what": "LDAP over TLS",
+   "expect": "should be closed"
+  },
+  {
+   "port": 2083,
+   "group": "Web apps and admin panels",
+   "what": "cPanel",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 2087,
+   "group": "Web apps and admin panels",
+   "what": "WHM (cPanel's server admin)",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 5000,
+   "group": "Web apps and admin panels",
+   "what": "macOS AirPlay Receiver, Synology DSM or a web app",
+   "expect": "close unless something here is meant to be public"
+  },
+  {
+   "port": 5001,
+   "group": "Web apps and admin panels",
+   "what": "Synology DSM (HTTPS)",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 7000,
+   "group": "Web apps and admin panels",
+   "what": "macOS AirPlay Receiver",
+   "expect": "should be closed: turn off AirPlay Receiver on a server"
+  },
+  {
+   "port": 8000,
+   "group": "Web apps and admin panels",
+   "what": "Web app (HTTP)",
+   "expect": "close unless something here is meant to be public"
+  },
+  {
+   "port": 8006,
+   "group": "Web apps and admin panels",
+   "what": "Proxmox VE",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 8080,
+   "group": "Web apps and admin panels",
+   "what": "Web app or proxy (HTTP)",
+   "expect": "close unless something here is meant to be public"
+  },
+  {
+   "port": 8443,
+   "group": "Web apps and admin panels",
+   "what": "Web app or Plesk (HTTPS)",
+   "expect": "close unless something here is meant to be public"
+  },
+  {
+   "port": 8888,
+   "group": "Web apps and admin panels",
+   "what": "Web app (HTTP)",
+   "expect": "close unless something here is meant to be public"
+  },
+  {
+   "port": 9000,
+   "group": "Web apps and admin panels",
+   "what": "Portainer or PHP-FPM",
+   "expect": "should be closed"
+  },
+  {
+   "port": 9090,
+   "group": "Web apps and admin panels",
+   "what": "Cockpit (Linux web admin)",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 9443,
+   "group": "Web apps and admin panels",
+   "what": "Portainer or a web app (HTTPS)",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 10000,
+   "group": "Web apps and admin panels",
+   "what": "Webmin",
+   "expect": "close or restrict by IP"
+  },
+  {
+   "port": 1883,
+   "group": "Messaging and printing",
+   "what": "MQTT",
+   "expect": "should be closed"
+  },
+  {
+   "port": 5672,
+   "group": "Messaging and printing",
+   "what": "RabbitMQ",
+   "expect": "should be closed"
+  },
+  {
+   "port": 15672,
+   "group": "Messaging and printing",
+   "what": "RabbitMQ management",
+   "expect": "should be closed"
+  },
+  {
+   "port": 631,
+   "group": "Messaging and printing",
+   "what": "IPP printing (CUPS)",
+   "expect": "should be closed"
+  }
+ ]
+}

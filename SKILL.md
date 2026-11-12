@@ -2,16 +2,16 @@
 name: cadenceux-fms-security
 description: >-
   Runs an interactive security check of a Claris FileMaker Server the user owns or manages:
-  ports and web paths exposed to the internet, PHP and XML publishing, server misconfigurations,
-  known CVEs (live from NVD), accounts and privileges in the hosted files (from Save a Copy as XML
-  exports), every server log for password spraying, Guest and auto-login abuse and bulk Data
-  API or OData downloads, and backups against the data owner's limits on data loss and
-  downtime. Ends with a ranked findings report, and gives containment and restore steps if an
-  attack is under way. Use when asked to security-check, audit, harden, pen test or review the
-  logs of a FileMaker Server or hosted FileMaker files, to check whether a server was hit by an
-  automated FileMaker attack or has known CVEs, or when FMS logs (Access.log, Event.log, an
-  nginx access log) are shared for review. Not for FileMaker Server installation or upgrades,
-  general FileMaker schema, script or privilege-set design, or servers the user isn't
+  ports, web paths and services exposed to the internet, PHP and XML publishing, server
+  misconfigurations, known CVEs (live from NVD) for FileMaker Server and its services, accounts
+  and privileges in the hosted files (from Save a Copy as XML exports), every server log for
+  password spraying, Guest and auto-login abuse and bulk downloads, and backups against the data
+  owner's limits on data loss and downtime. Ends with a ranked findings report, and gives
+  containment and restore steps if an attack is under way. Use when asked to security-check,
+  audit, harden, pen test or review the logs of a FileMaker Server, to check
+  whether a server was hit by an automated FileMaker attack or has known CVEs, or when FMS logs
+  (Access.log, Event.log) are shared for review. Not for FileMaker Server installation or
+  upgrades, general FileMaker schema, script or privilege-set design, or servers the user isn't
   authorised to test.
 license: CC-BY-4.0
 compatibility: >-
@@ -20,7 +20,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADT is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.2.2"
+  version: "1.3.0"
 ---
 
 # FileMaker Server security check
@@ -49,6 +49,22 @@ guidance.
 - **Plan for when, not if.** Recovery expectations belong to the data owner, not the developer
   or Claude. Ask for them, never assume them, and judge the backups against them.
 
+## Keep the context small
+
+A full scan used to fill the conversation with every check's raw output, then re-read it on every
+turn. The scripts now do the reading:
+
+- Run `scripts/fms_scan.py` and read **only what it prints** (also saved as `summary.txt`, about
+  5 KB). Never open `findings.json`, `logcheck.txt` or `exposure.txt` whole: `grep` them for the one
+  address or code a question needs (each finding is one line of `findings.json`).
+- Don't look addresses up (whois, reverse DNS) or search the raw logs unless the user asks: confirm
+  who an address is with the user, as the rules say.
+- Read a reference **only for the step at hand**, and only the section the question needs.
+- Finish `report-draft.md` with edits; don't rewrite the report from scratch.
+- Never paste a check's output back into the conversation.
+
+Sonnet is enough for a scan: the scripts make the judgements, and the model confirms and writes.
+
 ## Workflow
 
 Copy this checklist into the response and tick it off. The user can ask for any one step on
@@ -57,62 +73,59 @@ its own; do intake first regardless.
 ```
 FMS security check:
 - [ ] 1. Intake: scope, authorisation, intended exposure, recovery expectations
-- [ ] 2. Exposure check from outside the network
-- [ ] 3. Server configuration
-- [ ] 4. Hosted file security
-- [ ] 5. Log review
-- [ ] 6. Findings report and re-test
+- [ ] 2. Run the scan: exposure, services, published issues and logs, in one command
+- [ ] 3. Server configuration (the user runs the Admin API review)
+- [ ] 4. Hosted file security (Save a Copy as XML exports)
+- [ ] 5. Confirm addresses and judge what the scan found
+- [ ] 6. Finish the report and re-test
 ```
 
 ### 1. Intake
-
-**First, refresh the security advisories** (once per session, with the skill update check):
-run `python3 scripts/fms_advisories.py`, which fetches FileMaker CVEs live from NVD and
-falls back to the bundled list. Read
-[references/security-advisories.md](references/security-advisories.md) for the rules.
 
 Ask in one message (with the ask-user tool where the surface has one):
 
 1. Server hostname, and confirmation the user owns or manages it, or has permission to test it.
 2. Who hosts it (own hardware, cloud, a hosting provider) and who else holds admin access:
    hosting providers, management tools and anything holding Admin API keys.
-3. FileMaker Server version and operating system. As soon as you have the version, run
-   `python3 scripts/fms_advisories.py <version>` and carry every published issue it lists into
-   the report.
-4. Which services are meant to be used: FileMaker Pro/Go remotely, WebDirect, Data API, OData,
-   ODBC/JDBC, XML. This is the **intended exposure**; every finding is judged against it.
-5. Which hosted files exist, including deployment and utility files, and whether the user can
+3. FileMaker Server version and operating system, if known.
+4. Which services are meant to be used: FileMaker Pro and Go, WebDirect, Data API, OData,
+   ODBC/JDBC, XML, PHP, Admin Console, Admin API. This is the **intended exposure**; every finding
+   is judged against it.
+5. Where the logs are: the whole Logs folder as a zip, and the web-server access log.
+6. Which hosted files exist, including deployment and utility files, and whether the user can
    open each with a [Full Access] account in FileMaker Pro (needed for the file audit).
-6. Whether code execution is available here (Claude Code), or the user will run commands.
-7. **Recovery expectations, from the data owner.** Who owns the data; whether there's a written
-   Disaster Recovery (DR) plan; how much data they could lose (the time back to the last usable
-   backup); how long the server could be down before it hurts the business; who is called
-   when it happens (hosting provider, IT, whoever owns privacy); and when passwords were last
-   reset (Admin Console, [Full Access] accounts, Admin API keys: the date only, never the
-   password). Ask for the owner's answers, not the developer's guess. If they're unknown, record
-   "to agree with the owner" and carry on:
-   the gap becomes a finding, never a reason to stop.
+7. Whether code execution is available here (Claude Code), or the user will run commands.
+8. **Recovery expectations, from the data owner.** Who owns the data; whether there's a written
+   Disaster Recovery (DR) plan; how much data they could lose; how long the server could be down
+   before it hurts the business; who is called when it happens; and when passwords were last
+   reset (the date only, never the password). If they're unknown, record "to agree with the
+   owner" and carry on: the gap becomes a finding, never a reason to stop.
 
-### 2. Exposure check
+### 2. Run the scan
 
-Read [references/exposure-check.md](references/exposure-check.md), then run from **outside** the
-server's network:
+From **outside** the server's network (inside it, or on a VPN, the exposure check shows what the
+firewall allows internally; say so if that's the only option):
 
 ```bash
-python3 scripts/fms_exposure_check.py <hostname>
+python3 scripts/fms_scan.py <hostname> --logs <logs.zip or folder> --version <FMS version> --intended "<services from intake>"
 ```
 
-It covers the FileMaker ports, the certificate, and every web path that matters: Admin Console,
-Admin API, Data API, OData, XML, WebDirect, and the sign-in pages of third-party admin and
-deployment tools installed on the server. Ask in intake which such tools are installed and add
-their paths. Running it from inside the network or a VPN shows what the firewall allows
-internally, not what the internet sees; say so if that's the only option. Judge every open port
-and reachable path against the intended exposure.
+Run it from the user's working folder (where the report goes), giving the script's full path; don't
+`cd` into the skill. Leave out `--logs` or `--version` when there are none; the version is then read from outside if
+the server shows it. It runs the exposure check (82 ports, the certificate, the FileMaker web
+paths, and what each open port says, with no sign-in), published issues for the services found
+and for FileMaker Server, and the whole log review. It saves everything in
+`fms-scan-<hostname>-<date>/`, writes `findings.json` and `report-draft.md`, and prints the summary.
+The single checks are in [references/scripts.md](references/scripts.md), for re-running one.
+
+Asked about an operating system or kernel CVE? Nothing a server shows before sign-in reveals its
+patch level, so no outside check (or attacker) can confirm or rule it out. Say so, check the
+vendor's page for the CVE, and point to the server's own updates.
 
 ### 3. Server configuration
 
 Read [references/server-config.md](references/server-config.md). Ask the user to run the Admin
-API review **in their own terminal** and paste the output:
+API review **in their own terminal** and paste the FAIL and REVIEW lines:
 
 ```bash
 python3 scripts/fms_admin_review.py <hostname>
@@ -120,100 +133,58 @@ python3 scripts/fms_admin_review.py <hostname>
 
 It asks for the Admin Console password itself and refuses to run without a terminal, so never
 run it for them and never take the password. Then cover what it can't see (Deny Guest and
-auto-login, backups, a PHP engine on the machine (S15), the operating system, who else holds admin access) with the user, one
-area at a time, asking for a screenshot or a yes/no per item. Judge backups (S10) against the
-recovery expectations from intake: the backup interval against the data the owner can lose, a
-copy beyond the server's network, and a timed restore against the downtime they can bear.
-Write each gap as a finding with a priority and an owner (who fixes it), and put it in the
-report's Recovery readiness table.
+auto-login, backups, a PHP engine on the machine (S15), who else holds admin access) one area at
+a time, a screenshot or a yes/no per item. Judge backups (S10) against the recovery expectations
+from intake.
 
 ### 4. Hosted file security
 
-Read [references/file-security.md](references/file-security.md). Check every hosted file, not
-only the main solution. The default needs nothing beyond FileMaker Pro: the user saves each file
-with **Tools > Save a Copy as XML** into one folder, then run:
+Read [references/file-security.md](references/file-security.md). Check every hosted file. The
+user saves each with **Tools > Save a Copy as XML** into one folder, then run:
 
 ```bash
 python3 scripts/fms_file_audit.py <folder of .xml exports>
 ```
 
-Claris ADT is **optional** and uncommon: use it only if it's already installed, to add the
-blank-password check SaXML can't make. Never ask the user to install it for this.
+Claris ADT is **optional**: use it only if it's already installed, to add the blank-password
+check SaXML can't make. Never ask the user to install it for this.
 
-### 5. Log review
+### 5. Confirm addresses and judge
 
-Read [references/log-review.md](references/log-review.md). Ask for the whole Logs folder as a zip
-and the web-server access log, then run:
+Go through the summary's "Addresses to confirm" with the user, worst first. For what a flag means,
+read the matching part of [references/log-review.md](references/log-review.md); for a port, web
+path or service, [references/exposure-check.md](references/exposure-check.md); for a published
+issue, [references/security-advisories.md](references/security-advisories.md).
 
-```bash
-python3 scripts/fms_logcheck.py <logs.zip or folder> ["YYYY-MM-DD HH:MM"]
-```
-
-Go through each flagged address with the user. A clean result needs the logs to cover the
-period in question; a gap is a limit on the verdict, never a pass. A low failure count or the
-account lockout is never reassurance: say why (spraying stays under the lockout), and name the
-defences: strong unique passwords, allow-listing 443 and 2399 or a VPN, and a rate limiter or
-WAF. Failures flagged `XDBC` came through 2399, which a web rate limiter doesn't see. A sign-in
-before or after the failures counts. `POSSIBLE-COMPROMISE` (the sign-in was over ODBC/JDBC or as
-a generic account, or a new address tried 3+ account names) means stop and confirm who it is;
-`SIGNED-IN` alone is often staff mistyping, so ask rather than assume.
-
-### 6. Findings report and re-test
-
-Read [references/report-format.md](references/report-format.md) and write the report in that
-format: written for the server's owner, in tables and plain English. It has a summary table,
-"What to fix" (priority, what we found, why it matters, what to do, owner, status), "Recovery
-readiness" (the owner's expectations against today's backups and restores), "What passed",
-"Staff computers to update", "Not checked", "Next steps", and a closing section for the
-FileMaker administrator that holds the commands and evidence. Save it as a Markdown file in the
-user's working folder (or put it in the reply where no files can be written).
-
-Order findings Critical, High, Medium, Check, Low (definitions in each reference). After the user
-fixes items, re-run the exposure check and the affected checks, and update the Status column.
-Suggest a log check schedule from [references/log-review.md](references/log-review.md).
+A clean result needs the logs to cover the period in question; a gap is a limit on the verdict,
+never a pass. A low failure count or the account lockout is never reassurance (spraying stays under
+the lockout): name the defences, strong unique passwords, allow-listing 443 and 2399 or a VPN, and
+a rate limiter or WAF. `POSSIBLE-COMPROMISE` means stop and confirm who it is; `SIGNED-IN` alone is
+often staff mistyping, so ask rather than assume.
 
 **If anything points to an attack in progress or a compromise**, stop the review and follow
-[references/incident-response.md](references/incident-response.md) first. It covers containment,
-the DR plan, and choosing a backup from before the attack to restore.
+[references/incident-response.md](references/incident-response.md) first.
 
-## What the automated attacks do
+### 6. Finish the report and re-test
 
-The pattern Claris described (support.claris.com, KB 000049228, "Protecting FileMaker Server
-from automated attacks") and that this skill's checks look for:
+Read [references/report-format.md](references/report-format.md), then edit `report-draft.md` in
+place (small edits, not a rewrite):
+fill every TODO from intake and the user's answers, rewrite each row in plain English for the
+server's owner, add the server settings and file audit findings, set owners, and save it as
+`FMS security check - <server> - <YYYY-MM-DD>.md` (or put it in the reply where no files can be
+written). After the user fixes items, re-run `fms_scan.py` and update the Status column. Suggest a
+log check schedule from [references/log-review.md](references/log-review.md).
 
-1. Ask the server for its hosted file list through the web APIs (it needs no sign-in unless
-   Filter databases and Deny Guest and auto-login are both on).
-2. Open each file through Guest, auto-login, or a default Admin account with no password.
-3. Spray common passwords at generic account names, a few tries at a time from rotating
-   addresses, through ODBC/JDBC on port 2399 as well as 443. FileMaker locks a file account
-   for five minutes after five failed sign-ins within five minutes, and spraying stays under that. The defences are strong unique passwords,
-   allow-listing 443 and 2399 or a VPN, and a rate limiter or WAF.
-4. Once in, pull records through the Data API, 200 at a time, across every layout available.
+## Without code execution
 
-No FileMaker Server flaw is involved: every step works through configuration. Steps 2 and 4
-leave no failed sign-in, which is why the log review checks downloads as well as failures.
-
-## Scripts
-
-All five are run, not read, and need only Python 3 (built into macOS and most Linux; on
-Windows install it from python.org).
-
-| Script | What it does |
-|---|---|
-| `scripts/fms_advisories.py` | Fetches FileMaker CVEs live from NVD (one request), merges Claris release-note fixes from `references/advisories.json`, and lists every published issue a given FileMaker Server version (or FileMaker Pro version, with `--pro`) is exposed to. Falls back to the bundled list offline and says how old it is |
-| `scripts/fms_file_audit.py` | Reads Save a Copy as XML exports, no server connection: Guest, auto-login, generic and [Full Access] accounts, extended privileges, Encryption at Rest, reference protection, passwords typed into scripts, credentials in Insert from URL. Never prints hashes or script text |
-| `scripts/fms_admin_review.py` | Run **by the user** in their own terminal: signs in to the Admin API, reads version, certificate, secure-files, Admin Console restriction, Filter databases, services, per-file API privileges and encryption, connected Guest sessions, admin roles, schedules, plug-ins and Perform Script on Server sessions (GET only), signs out. A program that has already signed in can pass its token with `--token-stdin` instead, and signs out itself |
-| `scripts/fms_exposure_check.py` | TCP connect to FileMaker and admin ports, HTTP-to-HTTPS redirect, TLS certificate, HSTS and old TLS (1.0 and 1.1) checks, unauthenticated GET of the FileMaker web paths. Reports open ports, file lists shown before sign-in, the default web page, services answering, and XML or PHP publishing that answers |
-| `scripts/fms_logcheck.py` | Reads a Logs folder or zip: new addresses, FileMaker Pro/Go client builds with published issues, flagged failed sign-ins, addresses that failed and also signed in, ODBC/JDBC connections, admin sign-ins, settings and file events, Admin API errors, record download bursts, web-server requests |
-
-Without code execution, give the user the command for each script and ask them to paste the
-output.
+Give the user the `fms_scan.py` command, then ask for `summary.txt` and `report-draft.md` from the
+scan folder: about 15 KB in all, instead of every check's output.
 
 ## Skill update self-check
 
 Once per session, on the first request this skill handles: fetch
 `https://github.com/CadenceUX/cadenceux-fms-security-skill/raw/main/VERSION` and compare it with
-this skill's version (1.2.1). If newer, start the answer with:
+this skill's `metadata.version`. If newer, start the answer with:
 
 > ⚠️ **Skill update available:** this skill is v[installed]; v[latest] is at
 > https://github.com/CadenceUX/cadenceux-fms-security-skill/releases

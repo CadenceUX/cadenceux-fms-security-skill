@@ -1,0 +1,434 @@
+[
+ {
+  "code": "POSSIBLE-COMPROMISE",
+  "priority": "Critical",
+  "order": 1,
+  "weighs": "Compromise",
+  "title": "An address failed and also signed in, in a way that looks like an attack",
+  "why": "The sign-in was over ODBC/JDBC or on a generic account, or came from a new address trying three or more account names. Attackers sign in with what works, then keep trying other accounts and files.",
+  "todo": "Confirm today who this address is. If nobody can, follow the incident response steps."
+ },
+ {
+  "code": "FILE-LIST-OPEN",
+  "priority": "Critical",
+  "order": 1,
+  "weighs": "None",
+  "title": "Hosted file names are listed without sign-in",
+  "why": "Attack tools start here. They use the list to pick which files to try.",
+  "todo": "Turn on Filter Databases and Deny Guest and auto-login, then run the check again."
+ },
+ {
+  "code": "SIGNED-IN",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "Compromise",
+  "title": "An address failed and also signed in",
+  "why": "One or two failures followed by a sign-in on a person's own account is usually staff mistyping. Until someone confirms the address, it counts as possible compromise.",
+  "todo": "Confirm who this address belongs to and mark it as known."
+ },
+ {
+  "code": "XDBC-CONNECTION",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "An ODBC/JDBC connection reached the server",
+  "why": "An attacker who gets in first time leaves no failed sign-in. Each address should match a SQL or BI tool someone can name.",
+  "todo": "Confirm which tool this is. If nobody can, treat it as possible compromise."
+ },
+ {
+  "code": "XDBC",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "Failed sign-ins through ODBC/JDBC (port 2399)",
+  "why": "The attacks spray port 2399 as well as 443, and a web rate limiter or firewall in front of 443 doesn't see it.",
+  "todo": "Close port 2399 at the firewall, or allow it only from your SQL or BI tools' addresses."
+ },
+ {
+  "code": "RATE",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "Many failed sign-ins in a short time",
+  "why": "Twenty or more failures in ten minutes across several names is password spraying. On one name it's usually a person or a saved password retrying.",
+  "todo": "Allow-list ports 443 and 2399 or use a VPN, and check the account names tried."
+ },
+ {
+  "code": "MANY-ACCOUNTS",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "One address tried three or more account names",
+  "why": "This is the password-spraying pattern. A low count per account is no comfort, because spraying stays under the account lockout.",
+  "todo": "Use strong unique passwords, and allow-list ports 443 and 2399 or use a VPN."
+ },
+ {
+  "code": "MANY-FILES",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "One address tried three or more files",
+  "why": "Attack tools work through every hosted file they can list.",
+  "todo": "Use strong unique passwords, and allow-list ports 443 and 2399 or use a VPN."
+ },
+ {
+  "code": "GENERIC/DEFAULT",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "Sign-ins tried on a generic account name",
+  "why": "Blank, Admin, Guest, web, user, api, test and filemaker are what attack tools try first. From staff it's often a harmless saved blank attempt.",
+  "todo": "Confirm who this address is, and remove or rename generic accounts."
+ },
+ {
+  "code": "NEVER-SUCCEEDED",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "Attempted",
+  "title": "An address failed and never signed in",
+  "why": "No sign-in appears in the Access logs supplied. On its own this is lower risk, but it's still someone trying to get in.",
+  "todo": "Check the address against the people you know, then allow-list ports 443 and 2399 or use a VPN."
+ },
+ {
+  "code": "BEFORE-ACCESS-LOG",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "Attempted",
+  "title": "Failures older than the Access log",
+  "why": "The failures are older than the Access log, so a sign-in can't be ruled out. This is a limit on the verdict, never a pass.",
+  "todo": "Check any older copies of the Access log, and keep logs for longer from now on."
+ },
+ {
+  "code": "SERVER-ITSELF",
+  "priority": "Low",
+  "order": 5,
+  "weighs": "None",
+  "title": "Failed sign-ins from the server itself",
+  "why": "This is usually a script or schedule with a stale password. It isn't an attack, but it shouldn't be failing.",
+  "todo": "Find the schedule and fix its password."
+ },
+ {
+  "code": "FAILED-SIGN-IN",
+  "priority": "Low",
+  "order": 5,
+  "weighs": "None",
+  "title": "Failed sign-ins with no other warning sign",
+  "why": "The address has connected before and none of the warning patterns match.",
+  "todo": "Nothing unless it keeps happening."
+ },
+ {
+  "code": "CLIENT-UPDATE",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "A FileMaker Pro build with a published security issue connected",
+  "why": "The issue is in the client, so updating the server doesn't fix it.",
+  "todo": "Update FileMaker Pro on the staff computers listed."
+ },
+ {
+  "code": "ADMIN-NEW",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "An Admin Console sign-in from a new address",
+  "why": "Admin Console access controls the whole server.",
+  "todo": "Confirm today who signed in."
+ },
+ {
+  "code": "ADMIN-GENERIC",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "The Admin Console account has a guessable name",
+  "why": "A name such as admin gives an attacker half the login.",
+  "todo": "Rename the Admin Console account and use a strong unique password."
+ },
+ {
+  "code": "ADMIN-FAILED",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "Attempted",
+  "title": "Failed Admin Console sign-ins",
+  "why": "A repeating failure from one address usually means a tool still holds an old password. From an unknown address it's an attempt.",
+  "todo": "Confirm who this address is, and restrict Admin Console access to known addresses."
+ },
+ {
+  "code": "HIGH-VOLUME",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "A large volume of records went to one client",
+  "why": "Files with Guest or auto-login sign in without a single failure, so volume is how a download shows up.",
+  "todo": "Confirm who this client is and whether the download was expected."
+ },
+ {
+  "code": "WIDE",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "Many tables read by a new address or a generic account",
+  "why": "Reading across many tables in ten minutes is what a bulk download looks like.",
+  "todo": "Confirm who this client is and whether the access was expected."
+ },
+ {
+  "code": "BURST",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "A burst of Data API, OData or XML record calls",
+  "why": "The attacks pull records 200 at a time across every layout available.",
+  "todo": "Confirm which integration this is. If nobody can, treat it as possible compromise."
+ },
+ {
+  "code": "PHP-XML-ANSWERED",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "A PHP or XML page answered a request",
+  "why": "Scanners ask every server for these, so refusals are noise. A page that answered is not.",
+  "todo": "Check the server for PHP, then patch or remove it, and turn off XML publishing if it's unused."
+ },
+ {
+  "code": "PORT-OPEN",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "A port that should be closed is open",
+  "why": "Local-only and remote-access ports shouldn't answer from the internet. Port forwarders can show ports open when nothing is listening, so confirm on the server.",
+  "todo": "Close it at the firewall, or restrict it to known addresses."
+ },
+ {
+  "code": "SIGN-IN-PAGE-OPEN",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "An admin sign-in page is open to any address",
+  "why": "Anyone on the internet can try passwords against it.",
+  "todo": "Restrict the page to known addresses."
+ },
+ {
+  "code": "PHP-ON",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "PHP answers from the internet",
+  "why": "An upgrade may have left an old PHP engine behind.",
+  "todo": "Find its version on the server, then patch or remove it."
+ },
+ {
+  "code": "XML-ON",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "XML publishing is on",
+  "why": "An unused service is something else for an attacker to try.",
+  "todo": "Turn it off if it's unused."
+ },
+ {
+  "code": "CERTIFICATE",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "The certificate needs attention",
+  "why": "A self-signed or default certificate lets clients be intercepted.",
+  "todo": "Install a trusted custom certificate."
+ },
+ {
+  "code": "HTTP-NO-REDIRECT",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "Port 80 serves content over plain HTTP",
+  "why": "Port 80 should answer only with a redirect to HTTPS.",
+  "todo": "Redirect it to HTTPS."
+ },
+ {
+  "code": "EXPOSURE-CHECK",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "None",
+  "title": "The exposure check flagged a path",
+  "why": "The check marked this path for review.",
+  "todo": "Compare it with the services this server is meant to offer."
+ },
+ {
+  "code": "PORT-NOT-INTENDED",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "None",
+  "title": "An open port with no intended service behind it",
+  "why": "Every open port is one more way in, and the automated attacks start by finding what answers. A port nobody needs shouldn't be reachable at all.",
+  "todo": "If nothing needs it, close it at the firewall. If something does, tick that service under Intended services on Server Detail, and restrict the port to the addresses that use it."
+ },
+ {
+  "code": "SERVICE-ON",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "A web service answers that isn't ticked as intended",
+  "why": "Once the automated attacks find a way in, they pull records through the Data API and OData. A service nobody uses is a way in nobody watches.",
+  "todo": "Turn it off in the Admin Console if nothing uses it. If something does, tick it under Intended services on Server Detail."
+ },
+ {
+  "code": "SETTING-FAIL",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "A server setting goes against Claris's security advice",
+  "why": "The scan reads the server's settings through the Admin API with its own sign-in, and compares them with Claris's Security Guide.",
+  "todo": "Change the setting in the Admin Console."
+ },
+ {
+  "code": "SETTING-REVIEW",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "None",
+  "title": "A server setting to confirm",
+  "why": "The setting can be right for some solutions and wrong for others, so someone who knows the solution has to say.",
+  "todo": "Confirm the setting is needed, or change it in the Admin Console."
+ },
+ {
+  "code": "ADVISORY-CRITICAL",
+  "priority": "Critical",
+  "order": 1,
+  "weighs": "None",
+  "title": "A critical published issue affects this server's version",
+  "why": "A published issue with a CVSS score of 9 or more. Attackers look for servers that haven't been updated.",
+  "todo": "Update FileMaker Server to the release that fixes it."
+ },
+ {
+  "code": "ADVISORY-HIGH",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "A serious published issue affects this server's version",
+  "why": "A published issue with a CVSS score of 7 to 8.9.",
+  "todo": "Update FileMaker Server to the release that fixes it."
+ },
+ {
+  "code": "ADVISORY",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "A published issue affects this server's version",
+  "why": "A published issue, or a security fix Claris lists only in its release notes.",
+  "todo": "Update FileMaker Server to the release that fixes it."
+ },
+ {
+  "code": "VERSION-BEHIND",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "FileMaker Server is behind its latest release",
+  "why": "No published issue affects this version, but later releases carry fixes, and Claris recommends updating promptly.",
+  "todo": "Plan the update to the latest release."
+ },
+ {
+  "code": "HSTS-OFF",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "HTTPS doesn't tell browsers to stay on HTTPS (HSTS)",
+  "why": "Without HSTS, a browser can be sent to plain HTTP first. Claris turns HSTS on once a custom certificate is installed.",
+  "todo": "Turn on HSTS: install a trusted custom certificate, or check the web server's settings."
+ },
+ {
+  "code": "TLS-OLD",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "HTTPS still accepts TLS 1.0 or 1.1",
+  "why": "Old TLS versions have known weaknesses, and Claris's guide says to use current TLS only.",
+  "todo": "Turn off TLS 1.0 and 1.1 on the server's web server."
+ },
+ {
+  "code": "VNC-NO-PASSWORD",
+  "priority": "Critical",
+  "order": 1,
+  "weighs": "None",
+  "title": "Screen sharing answers with no password",
+  "why": "Anyone on the internet who connects gets the server's screen, keyboard and mouse, with nothing to guess.",
+  "todo": "Set a password for screen sharing, or turn it off, and close the port to the internet."
+ },
+ {
+  "code": "SERVICE-CVE-CRITICAL",
+  "priority": "Critical",
+  "order": 1,
+  "weighs": "None",
+  "title": "A critical published issue affects a service the internet can reach",
+  "why": "A published issue rated Critical (CVSS 9 or above) in a service that answers from outside. Attack tools try these soon after they're published.",
+  "todo": "Update the service today, or close its port to the internet until it's updated."
+ },
+ {
+  "code": "SERVICE-CVE-HIGH",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "A serious published issue affects a service the internet can reach",
+  "why": "A published issue rated High (CVSS 7 to 8.9) in a service that answers from outside.",
+  "todo": "Update the service, or allow its port only from known addresses until it's updated."
+ },
+ {
+  "code": "SERVICE-CVE",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "Published issues affect a service the internet can reach",
+  "why": "Published issues rated Medium or Low in a service that answers from outside. Each is a smaller risk, but they add up.",
+  "todo": "Include the service in the server's next round of updates."
+ },
+ {
+  "code": "RDP-NO-NLA",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "Remote Desktop shows its sign-in screen to anyone",
+  "why": "Without Network Level Authentication, anyone can reach the Windows sign-in screen without authenticating, and Remote Desktop's worst published issues (BlueKeep) need exactly that.",
+  "todo": "Turn on Network Level Authentication, and allow Remote Desktop only over a VPN."
+ },
+ {
+  "code": "SMB1",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "File sharing only speaks SMB1",
+  "why": "SMB1 is retired and has no modern protections. The WannaCry and NotPetya worms spread through it.",
+  "todo": "Turn off SMB1, and close file sharing (445) to the internet."
+ },
+ {
+  "code": "OS-UNSUPPORTED",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "The operating system is out of support",
+  "why": "A release past its end of support gets no security fixes at all, so every issue found from now on stays open.",
+  "todo": "Upgrade the server to a supported release of its operating system."
+ },
+ {
+  "code": "OS-EXTENDED",
+  "priority": "Check",
+  "order": 4,
+  "weighs": "None",
+  "title": "The operating system is on extended support only",
+  "why": "Standard support has ended. Security fixes still come, but only through Ubuntu Pro (ESM) or Debian LTS.",
+  "todo": "Confirm the server gets extended security updates (for Ubuntu, that Ubuntu Pro is attached), and plan the upgrade."
+ },
+ {
+  "code": "SERVICE-VERSION-SHOWN",
+  "priority": "Low",
+  "order": 5,
+  "weighs": "None",
+  "title": "Services give away their versions before sign-in",
+  "why": "A version tells an attacker which published issues to try. Hiding it doesn't patch anything, but it stops the server standing out in a search.",
+  "todo": "Hide the version where the software allows it: nginx server_tokens off, Apache ServerTokens Prod, PHP expose_php Off. OpenSSH always sends its version."
+ },
+ {
+  "code": "SERVICE-NAMES-SHOWN",
+  "priority": "Low",
+  "order": 5,
+  "weighs": "None",
+  "title": "The server gives away its computer and domain names",
+  "why": "Remote Desktop and file sharing answer the first step of a sign-in with the computer and domain names. Attackers use them to aim password spraying.",
+  "todo": "Close Remote Desktop and file sharing to the internet, or allow them only over a VPN."
+ }
+]

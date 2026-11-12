@@ -1,12 +1,29 @@
 # Log review
 
 ## Contents
+- What the automated attacks do
 - Which logs to collect
 - Running the log check
 - Reading each section
 - Identifying addresses
 - Verdicts
 - How often to check
+
+## What the automated attacks do
+
+The pattern Claris described (support.claris.com, KB 000049228, "Protecting FileMaker Server
+from automated attacks") and that the log check looks for:
+
+1. Ask the server for its hosted file list through the web APIs (it needs no sign-in unless
+   Filter databases and Deny Guest and auto-login are both on).
+2. Open each file through Guest, auto-login, or a default Admin account with no password.
+3. Spray common passwords at generic account names, a few tries at a time from rotating
+   addresses, through ODBC/JDBC on port 2399 as well as 443. FileMaker locks a file account for
+   five minutes after five failed sign-ins within five minutes, and spraying stays under that.
+4. Once in, pull records through the Data API, 200 at a time, across every layout available.
+
+No FileMaker Server flaw is involved: every step works through configuration. Steps 2 and 4
+leave no failed sign-in, which is why the log review checks downloads as well as failures.
 
 ## Which logs to collect
 
@@ -50,8 +67,10 @@ python3 scripts/fms_logcheck.py ~/Downloads/server-logs.zip "2026-10-15 00:00"
 ```
 
 For a first review, start from the earliest date the logs hold, so every address is judged.
-For routine checks, use the last check's end time. Without code execution, give the user both
-commands and ask for the output.
+For routine checks, use the last check's end time. `fms_scan.py` runs it over everything the logs
+hold, with `--brief` (the busiest and new connections, the failed sign-ins that matter most, counts
+for the rest) and the full output saved as `logcheck.txt`. Run it alone with `--brief` too, unless
+a section's full list is needed.
 
 ## Reading each section
 

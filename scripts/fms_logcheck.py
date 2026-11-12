@@ -8,10 +8,14 @@ file events, Admin API errors, bursts of record downloads, and outside requests
 to FileMaker, PHP and XML web paths. Uses only the Python standard library.
 
 Usage:
-    python3 fms_logcheck.py <log folder or .zip> [since]
+    python3 fms_logcheck.py <log folder or .zip> [since] [--brief] [--save <file>]
 
     since   "YYYY-MM-DD HH:MM" in the server's local time. If left out, the
             check covers the 24 hours before the newest Access.log entry.
+    --brief     the busiest and new connections, the failed sign-ins that matter most and
+                counts for the rest, so an Agent reading it keeps its context small. On a
+                server with 288 addresses, 81 KB of output became about 10 KB.
+    --save      also write the full output to this file, to search when a line is needed.
 
 Examples:
     python3 fms_logcheck.py ~/Downloads/server-logs.zip
@@ -39,6 +43,21 @@ DOWNLOAD_MB = 20      # per client per 10 minutes; busy production servers peake
 WIDE_TABLES = 40      # developers reach 60+ tables, so WIDE needs a NEW or GUEST/GENERIC client too
 FAIL_RATE = 20        # failures per address per 10 minutes; a person retrying rarely passes this on more than one name
 API_CALLS = 100       # Data API / OData record calls per address per 10 minutes (attackers page 200 at a time)
+BRIEF_BUSIEST = 10    # --brief: the busiest connections shown; NEW ones are always shown
+BRIEF_FAILS = 25      # --brief: failed sign-in addresses shown, the most serious flags first
+# The flags that make a failed sign-in address worth reading in --brief, most serious first. NEVER-SUCCEEDED and
+# BEFORE-ACCESS-LOG are on almost every address that fails, so on their own they're only counted.
+BRIEF_FLAGS = ["POSSIBLE-COMPROMISE", "SIGNED-IN", "XDBC", "RATE", "MANY-ACCOUNTS", "MANY-FILES", "GENERIC/DEFAULT",
+               "SERVER-ITSELF"]
+
+FULL, OPTS = [], {"brief": False}
+
+
+def out(text="", brief=True):
+    """Every line goes to the full output (--save); a line marked brief=False is left out of --brief."""
+    FULL.append(text)
+    if brief or not OPTS["brief"]:
+        print(text)
 
 
 def is_log(name):
@@ -93,13 +112,26 @@ def hide_typed_password(name):
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
         sys.exit(__doc__)
-    logs = open_logs(sys.argv[1])
+    OPTS["brief"] = "--brief" in args
+    save = args[args.index("--save") + 1] if "--save" in args[:-1] else ""
+    args = [a for i, a in enumerate(args) if a != "--brief" and a != "--save" and not (i and args[i - 1] == "--save")]
+    try:
+        report(args, save)
+    finally:
+        if save:
+            with open(save, "w", encoding="utf-8") as f:
+                f.write("\n".join(FULL) + "\n")
+
+
+def report(args, save):
+    logs = open_logs(args[0])
     if "Access.log" not in logs or "Event.log" not in logs:
         sys.exit("Access.log and Event.log are needed; found: " + ", ".join(sorted(logs)))
-    if len(sys.argv) > 2:
-        since = sys.argv[2]
+    if len(args) > 1:
+        since = args[1]
     else:
         last = max(l[:16] for l in lines(logs, "Access.log") if l[:4].isdigit())
         since = (datetime.datetime.strptime(last, "%Y-%m-%d %H:%M") - datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M")
@@ -154,21 +186,25 @@ def main():
     def is_new(ip):
         return not first_review and ip not in seen_before and ip not in LOCAL
 
-    print(f"##### FMS log check: {since} onward")
-    print(f"Files: {', '.join(sorted(logs))}")
-    print(f"\n## Connections (Access.log): {len(after)} addresses, {sum(r['n'] for r in after.values())} lines")
+    out(f"##### FMS log check: {since} onward")
+    out(f"Files: {', '.join(sorted(logs))}")
+    out(f"\n## Connections (Access.log): {len(after)} addresses, {sum(r['n'] for r in after.values())} lines")
     if first_review:
-        print("   First review: the window starts at the first log entry, so no address can be marked NEW")
+        out("   First review: the window starts at the first log entry, so no address can be marked NEW")
     else:
-        print("   NEW = address not seen before the window")
+        out("   NEW = address not seen before the window")
     private = [ip for ip in after if ipaddress.ip_address(ip).is_private]
     if after and len(private) == len(after):
-        print("   All addresses are private: the server is behind NAT, a proxy, a load balancer or a container\n"
+        out("   All addresses are private: the server is behind NAT, a proxy, a load balancer or a container\n"
               "   gateway, so these logs don't show real client addresses. Check the edge firewall or proxy logs")
-    for ip, r in sorted(after.items(), key=lambda x: -x[1]["n"]):
+    for rank, (ip, r) in enumerate(sorted(after.items(), key=lambda x: -x[1]["n"])):
         flag = "NEW " if is_new(ip) else "    "
-        print(f"{flag}{ip:40} n={r['n']:<6} {r['first']}..{r['last'][5:]} pc={sorted(r['pc'])[:3]} "
-              f"app={sorted(r['app'])[:2]} acct={sorted(r['acct'])[:5]}")
+        out(f"{flag}{ip:40} n={r['n']:<6} {r['first']}..{r['last'][5:]} pc={sorted(r['pc'])[:3]} "
+            f"app={sorted(r['app'])[:2]} acct={sorted(r['acct'])[:5]}", brief=rank < BRIEF_BUSIEST or is_new(ip))
+    hidden = sum(1 for rank, (ip, r) in enumerate(sorted(after.items(), key=lambda x: -x[1]["n"]))
+                 if not (rank < BRIEF_BUSIEST or is_new(ip)))
+    if OPTS["brief"] and hidden:
+        print(f"   and {hidden} more addresses, none NEW (all in the full output)")
 
     fails = collections.defaultdict(lambda: dict(n=0, xdbc=0, acct=set(), files=set(), chan=set(), first=None,
                                                  windows=collections.Counter()))
@@ -200,14 +236,14 @@ def main():
                 and "Secure (SSL)" not in msg:
             other[re.sub(r"\d", "#", msg)[:150]] += 1
 
-    print(f"\n## Failed FileMaker sign-ins: {sum(r['n'] for r in fails.values())} from {len(fails)} addresses")
-    print(f"   Flags: POSSIBLE-COMPROMISE, SIGNED-IN, NEVER-SUCCEEDED, BEFORE-ACCESS-LOG, MANY-ACCOUNTS (3+), MANY-FILES (3+),\n"
+    out(f"\n## Failed FileMaker sign-ins: {sum(r['n'] for r in fails.values())} from {len(fails)} addresses")
+    out(f"   Flags: POSSIBLE-COMPROMISE, SIGNED-IN, NEVER-SUCCEEDED, BEFORE-ACCESS-LOG, MANY-ACCOUNTS (3+), MANY-FILES (3+),\n"
           f"   GENERIC/DEFAULT account, XDBC (ODBC/JDBC, port 2399), RATE ({FAIL_RATE}+ in 10 minutes), SERVER-ITSELF")
     xdbc_fails = {ip: r["xdbc"] for ip, r in fails.items() if r["xdbc"]}
     if xdbc_fails:
-        print(f"   ODBC/JDBC: {sum(xdbc_fails.values())} of the failures came through port 2399, from {len(xdbc_fails)} address(es).\n"
+        out(f"   ODBC/JDBC: {sum(xdbc_fails.values())} of the failures came through port 2399, from {len(xdbc_fails)} address(es).\n"
               "   The attacks use 2399 too; unless a known SQL or BI tool explains them, close 2399 or allow-list it")
-    typed = False
+    typed, rows = False, []
     for ip, r in sorted(fails.items(), key=lambda x: -x[1]["n"]):
         flags, peak = [], max(r["windows"].values())
         ok = signins.get(ip, []) if ip not in LOCAL else []
@@ -238,18 +274,29 @@ def main():
         shown = [hide_typed_password(a) for a in sorted(r["acct"])]
         typed = typed or any(a.startswith("<hidden") for a in shown)
         more = f" +{len(shown) - 12} more" if len(shown) > 12 else ""
-        print(f"  {ip:40} n={r['n']:<4} peak10={peak:<3} accts={len(shown)} {shown[:12]}{more} files={len(r['files'])} "
-              f"via={sorted(r['chan'])} {' '.join(flags)}")
+        rows.append((flags, f"  {ip:40} n={r['n']:<4} peak10={peak:<3} accts={len(shown)} {shown[:12]}{more} files={len(r['files'])} "
+                            f"via={sorted(r['chan'])} {' '.join(flags)}"))
+    # --brief: the most serious first (the first BRIEF_FLAGS flag each has), then the busiest; the rest as counts
+    def weight(flags):
+        names = [f.split(" ")[0] for f in flags]
+        return min((BRIEF_FLAGS.index(f) for f in names if f in BRIEF_FLAGS), default=len(BRIEF_FLAGS))
+    keep = {id(x) for x in sorted(rows, key=lambda x: weight(x[0]))[:BRIEF_FAILS] if weight(x[0]) < len(BRIEF_FLAGS)}
+    for x in rows:
+        out(x[1], brief=id(x) in keep)
+    if OPTS["brief"] and len(rows) > len(keep):
+        counts = collections.Counter(f.split(" ")[0] for x in rows if id(x) not in keep for f in x[0])
+        print(f"   and {len(rows) - len(keep)} more addresses (all in the full output), flagged: "
+              + (", ".join(f"{k} {n}" for k, n in counts.most_common()) or "nothing"))
     if typed:
-        print("   An account name above looks like a typed password. It's hidden here and stays in the log:\n"
+        out("   An account name above looks like a typed password. It's hidden here and stays in the log:\n"
               "   have the person change that password, and don't copy that log line into a report")
     if not access_first:
-        print("   Access.log has no dated lines, so no address can be said to have never signed in")
+        out("   Access.log has no dated lines, so no address can be said to have never signed in")
 
-    print(f"\n## ODBC/JDBC connections (Access.log): {sum(x['n'] for x in xdbc.values())} from {len(xdbc)} addresses")
+    out(f"\n## ODBC/JDBC connections (Access.log): {sum(x['n'] for x in xdbc.values())} from {len(xdbc)} addresses")
     for ip, x in sorted(xdbc.items(), key=lambda i: -i[1]["n"]):
         flag = ("  NEW" if is_new(ip) else "") + ("  GENERIC" if {a.lower() for a in x["acct"]} & GENERIC else "")
-        print(f"  {ip:40} n={x['n']:<5} {x['first']}..{x['last'][5:]} accts={sorted(x['acct'])[:8]}{flag}")
+        out(f"  {ip:40} n={x['n']:<5} {x['first']}..{x['last'][5:]} accts={sorted(x['acct'])[:8]}{flag}")
 
     # Client versions: which FileMaker Pro and Go builds connected, matched against the
     # skill's bundled FileMaker Pro advisories (no network; fms_advisories.py has the live list)
@@ -268,7 +315,7 @@ def main():
             adv = fms_advisories.load_bundled()
         except (ImportError, SystemExit):
             adv = None
-        print(f"\n## Client versions (Access.log): {len(clients)} FileMaker Pro/Go build(s)")
+        out(f"\n## Client versions (Access.log): {len(clients)} FileMaker Pro/Go build(s)")
         for (kind, ver), c in sorted(clients.items(), key=lambda x: fms_advisories_vt(x[0][1])):
             note = ""
             if adv and kind.startswith("Pro"):
@@ -277,22 +324,26 @@ def main():
                         for e, f in hits if f]
                 if hits:
                     note = "  UPDATE: " + "; ".join(hits)
-            print(f"  {kind + ' ' + ver:24} {c['n']:3} address(es), e.g. {', '.join(sorted(c['where'])[:3])}{note}")
+            out(f"  {kind + ' ' + ver:24} {c['n']:3} address(es), e.g. {', '.join(sorted(c['where'])[:3])}{note}")
 
-    print("\n## Admin Console / fmsadmin sign-ins")
-    for (ip, acct, how), n in admin.most_common():
+    out("\n## Admin Console / fmsadmin sign-ins")
+    for rank, ((ip, acct, how), n) in enumerate(admin.most_common()):
         flags = ("  NEW" if is_new(ip) else "") + ("  GENERIC" if acct.lower() in GENERIC else "")
-        print(f"  {n:4} {ip:40} {acct} ({how}){flags}")
-    print(f"## Admin sign-in failures: {dict(admin_fail) or 'none'}")
+        out(f"  {n:4} {ip:40} {acct} ({how}){flags}", brief=rank < 15)
+    if OPTS["brief"] and len(admin) > 15:
+        rest = list(admin)[15:]
+        print(f"   and {len(rest)} more address and account pairs (all in the full output): "
+              f"{sum(1 for ip, a, h in rest if is_new(ip))} NEW, {sum(1 for ip, a, h in rest if a.lower() in GENERIC)} GENERIC")
+    out(f"## Admin sign-in failures: {dict(admin_fail) or 'none'}")
 
-    print("\n## Security, settings and file events")
-    for k, n in other.most_common(30):
-        print(f"  {n:4} {k}")
+    out("\n## Security, settings and file events")
+    for rank, (k, n) in enumerate(other.most_common(30)):
+        out(f"  {n:4} {k}", brief=rank < 10)
 
     fac = [l for l in lines(logs, "fac.log") if l[:16] >= since and re.search(r"error", l, re.I) and "Data Storage" not in l]
-    print(f"\n## Admin API errors (fac.log): {len(fac)}")
+    out(f"\n## Admin API errors (fac.log): {len(fac)}")
     for k, n in collections.Counter(re.sub(r"^\S+ \S+ \S+", "", re.sub(r"\d", "#", l))[:140] for l in fac).most_common(10):
-        print(f"  {n:4} {k}")
+        out(f"  {n:4} {k}")
 
     # Record downloads: per client, per 10-minute window. TopCallStats keeps only the
     # busiest calls in each interval, so these counts are a floor, not a total.
@@ -307,10 +358,10 @@ def main():
         r["mb"] += int(p[7] or 0) / 1e6
         r["tables"].add("::".join(p[5].split("::")[:2]))
     if "TopCallStats.log" not in logs:
-        print("\n## Record downloads (TopCallStats.log): not supplied")
+        out("\n## Record downloads (TopCallStats.log): not supplied")
     else:
-        print(f"\n## Record downloads (TopCallStats.log): {len(reads)} client 10-minute windows")
-        print(f"   Flags: HIGH-VOLUME ({DOWNLOAD_MB}+ MB), WIDE ({WIDE_TABLES}+ tables) on a NEW address "
+        out(f"\n## Record downloads (TopCallStats.log): {len(reads)} client 10-minute windows")
+        out(f"   Flags: HIGH-VOLUME ({DOWNLOAD_MB}+ MB), WIDE ({WIDE_TABLES}+ tables) on a NEW address "
               "or GUEST/GENERIC account")
         # The 5 biggest windows by volume, then the 5 widest, without repeats
         shown = dict(sorted(reads.items(), key=lambda x: -x[1]["mb"])[:5] +
@@ -328,31 +379,31 @@ def main():
                 flags.append("NEW")
             if accts & GENERIC:
                 flags.append("GUEST/GENERIC")
-            print(f"  {win} {who[:50]:50} reads={r['n']:<4} MB={r['mb']:<6.1f} tables={len(r['tables']):<3} {' '.join(flags)}")
+            out(f"  {win} {who[:50]:50} reads={r['n']:<4} MB={r['mb']:<6.1f} tables={len(r['tables']):<3} {' '.join(flags)}")
 
     rotated = sorted(n for n in logs if n.startswith("nginx-access.log-"))
     ng = [p for p in (l.split("\t") for l in lines(logs, *rotated, "nginx-access.log")) if len(p) >= 7]
     if not ng:
-        print("\n## Web server (nginx-access.log): not supplied. This check reads nginx only:\n"
+        out("\n## Web server (nginx-access.log): not supplied. This check reads nginx only:\n"
               "   read an IIS or Apache log by hand for /fmi/ paths and any .php page that answered")
         return
-    print(f"\n## Web server (nginx-access.log): {len(ng)} requests, {ng[0][2][:16]} .. {ng[-1][2][:16]}")
-    print("  status:", collections.Counter(p[4] for p in ng).most_common())
+    out(f"\n## Web server (nginx-access.log): {len(ng)} requests, {ng[0][2][:16]} .. {ng[-1][2][:16]}")
+    out("  status:", collections.Counter(p[4] for p in ng).most_common())
     fm = collections.Counter(
         (p[0], p[3].split(" ")[0].strip('"'), re.sub(r"\?.*", "", p[3].split(" ")[1]) if " " in p[3] else p[3], p[4])
         for p in ng if re.search(r"/(fmi|otto|admin-console|fmws)", p[3]) and "wpe/info" not in p[3])
-    print("  FileMaker web paths (excluding uptime checks):")
+    out("  FileMaker web paths (excluding uptime checks):")
     for k, n in fm.most_common(25):
-        print(f"    {n:4} {k}")
-    print("  busiest addresses:", collections.Counter(p[0] for p in ng).most_common(10))
+        out(f"    {n:4} {k}")
+    out("  busiest addresses:", collections.Counter(p[0] for p in ng).most_common(10))
 
     # PHP and XML. Scanners ask for .php pages on every server, so 404s are noise; a page that answered is not.
     phpxml = [p for p in ng if re.search(r"\.php\b|/fmi/xml|/fmi/php|/fmi-test|fmresultset|FMPXMLRESULT", p[3], re.I)]
-    print(f"  PHP and XML requests: {len(phpxml)}, by status {collections.Counter(p[4] for p in phpxml).most_common()}")
+    out(f"  PHP and XML requests: {len(phpxml)}, by status {collections.Counter(p[4] for p in phpxml).most_common()}")
     answered = collections.Counter((p[0], re.sub(r"\?.*", "", p[3].split(" ")[1]) if " " in p[3] else p[3], p[4])
                                    for p in phpxml if p[4].startswith("2"))
     for (ip, path, status), n in answered.most_common(15):
-        print(f"    ANSWERED {n:4} {ip:40} {path} {status}")
+        out(f"    ANSWERED {n:4} {ip:40} {path} {status}")
 
     # Data API, OData and XML record reads, per address per 10 minutes (the Claris pattern:
     # many 200-record pages pulled from many layouts in a short time)
@@ -369,13 +420,13 @@ def main():
         r = api[(p[0], p[2][:15] + "0")]
         r["n"] += 1
         r["layouts"].add("/".join(x for x in m.groups() if x))
-    print(f"  Data API, OData and XML record calls answered: {sum(r['n'] for r in api.values())}")
+    out(f"  Data API, OData and XML record calls answered: {sum(r['n'] for r in api.values())}")
     if refused:
-        print("  Refused record calls (no records returned): "
+        out("  Refused record calls (no records returned): "
               + ", ".join(f"{ip} {status} x{n}" for (ip, status), n in refused.most_common(10)))
     for (ip, win), r in sorted(api.items(), key=lambda x: -x[1]["n"])[:10]:
         flag = "  BURST" if r["n"] >= API_CALLS or len(r["layouts"]) >= 5 else ""
-        print(f"    {win} {ip:40} calls={r['n']:<5} layouts={len(r['layouts'])}{flag}")
+        out(f"    {win} {ip:40} calls={r['n']:<5} layouts={len(r['layouts'])}{flag}")
 
 
 if __name__ == "__main__":

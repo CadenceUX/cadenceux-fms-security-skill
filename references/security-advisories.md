@@ -5,7 +5,7 @@ how to match them to a version. Checked **2026-10-31**. The data lives in `advis
 this file) and is refreshed live from NVD by `scripts/fms_advisories.py`.
 
 ## Contents
-- First call: refresh the list
+- Refreshing the list
 - Matching a server's version
 - Latest releases
 - CVEs
@@ -14,19 +14,15 @@ this file) and is refreshed live from NVD by `scripts/fms_advisories.py`.
 - FileMaker Cloud
 - Rules for reporting
 
-## First call: refresh the list
+## Refreshing the list
 
-Once per session, on the first request, alongside the skill update check:
-
-```bash
-python3 scripts/fms_advisories.py
-```
-
-It makes one request to NVD's public CVE API, merges the result with the bundled list, and
-says which source it used. If NVD can't be reached it uses the bundled list and says how old
-it is. Without code execution, fetch
-`https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=FileMaker` and read
-the newest entries, or use the tables below and state their date.
+`fms_scan.py --version <version>` looks the version up live (one request to NVD's public CVE API,
+merged with the bundled list), so there's no separate refresh at intake. Run
+`python3 scripts/fms_advisories.py` with no version only when the user asks for every published
+issue: the full list is long. If NVD can't be reached the script uses the bundled list and says how
+old it is. Without code execution, fetch
+`https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=FileMaker` and read the newest
+entries, or use the tables below and state their date.
 
 Also check Claris's release notes
 (https://help.claris.com/en/server-release-notes/content/) for a release newer than those
@@ -34,7 +30,8 @@ below; the script flags it when NVD names a fixed version newer than the bundled
 
 ## Matching a server's version
 
-As soon as intake gives the version (or the admin review reports it):
+`fms_scan.py` does this when it has the version. On its own, as soon as intake gives the version
+(or the admin review reports it):
 
 ```bash
 python3 scripts/fms_advisories.py <version>

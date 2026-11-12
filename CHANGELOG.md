@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.3.0] — 2026-11-13
+
+A scan now costs far less of a usage limit, and sees what an attacker sees. One command runs every
+automated check and prints a short summary instead of each check's full output; the skill reads a
+reference only for the step at hand. The exposure check now covers every common service on a Mac,
+Windows or Unix server, what each one gives away before sign-in, and the published issues for those
+versions. No sign-in, no SSH account, no exploit.
+
+### Token use
+
+Before 1.3.0 a full scan of one server used about 5% of a weekly usage limit (8 November 2026). The
+conversation carried every check's raw output, about 100 to 170 KB (81 KB from the log check alone
+on a server with 288 addresses), and re-read it on every one of 25 to 40 turns.
+
+- `scripts/fms_scan.py`: one command for the exposure check, services, published issues and the log
+  review. Saves each full output, writes `findings.json` and `report-draft.md` (the report layout
+  with what only the user can supply marked TODO), and prints a summary of about 5 KB. On a busy
+  that replaced about 110 KB of check output.
+- `scripts/fms_findings.py`: the code that turns check output into findings, shared with the FMS
+  FileMaker solution that runs these checks without a model, so a finding reads the same in both. `references/finding-templates.json`
+  gives each its priority, title, why and what to do.
+- `scripts/fms_logcheck.py --brief` (the busiest and new connections, the failed sign-ins that matter
+  most, counts for the rest) and `--save <file>` for the full output. 81 KB became 16 KB on a busy
+  server. Without either flag the output is unchanged.
+- `SKILL.md`: from 16 KB to 11 KB. A "Keep the context small" section; references read per step; the
+  scripts table moved to `references/scripts.md` and the attack pattern to `references/log-review.md`.
+- No published-issues list at intake: the version is looked up when the scan has it. The no-version
+  list (3.8 KB) runs only when asked for.
+- Without code execution, the user shares `summary.txt` and `report-draft.md` (about 15 KB) instead
+  of every output.
+
+### Added
+
+- `references/ports.json`: 56 more ports (82 in all), grouped: remote access, file sharing,
+  databases, mail, directory and DNS, web apps and admin panels, containers and monitoring,
+  messaging and printing. The FileMaker 26 keep their order and wording.
+- `scripts/fms_service_scan.py`, run by the exposure check on every open port: SSH, FTP, mail and
+  MySQL greetings, web server headers, VNC security types (macOS Screen Sharing, no password),
+  and the first NTLM answer from Remote Desktop and SMB (Windows build, NLA, names given away).
+  macOS's and Samba's placeholder NTLM version is never read as Windows.
+- `scripts/fms_exposure_check.py`: a `## Services` section, an `## OS` line with its evidence,
+  FileMaker Server's version from the Data API's product information (no sign-in), a
+  `## Not visible from outside` line, and `--services-json`.
+- `scripts/fms_service_advisories.py`: Ubuntu SSH packages checked against Ubuntu's security data
+  for their release (fixed package versions compared as dpkg does), through OSV.dev (one request,
+  about 2 seconds) with Ubuntu's own API as the fallback; other versions against NVD by CPE, kept
+  only when NVD lists the version as vulnerable; the operating system's support. Checked against
+  Ubuntu's API on 13 November 2026: the same 31 CVEs, fixes and scores for one OpenSSH package.
+- `references/os-lifecycle.json`: Windows builds, Ubuntu LTS and Debian releases with their support
+  end dates, checked 12 November 2026.
+- `scripts/test_service_scan.py`: 74 tests on recorded greetings, answers and lookups, no network.
+- `references/exposure-check.md`: Services and operating system, Published issues for the
+  services, What can't be seen from outside, and new severity rows. `SKILL.md`: the two commands,
+  and what to say when asked about an OS or kernel CVE.
+
+### Changed
+
+- The ports `scripts/fms_exposure_check.py` tries now live in `references/ports.json` (port, group,
+  what uses it, expectation), so other tools can show exactly what's scanned.
+- Ports are tried 8 at a time, printed in list order. 82 ports against this Mac took about 9
+  seconds; a firewalled server waits up to 4 seconds per filtered port.
+
 ## [1.2.2] — 2026-11-08
 
 Two more checks Claris's Security Guide recommends, and a way for a program that has already signed
