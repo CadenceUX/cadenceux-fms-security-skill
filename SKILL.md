@@ -17,10 +17,10 @@ license: CC-BY-4.0
 compatibility: >-
   Designed for Claude Code, where it runs the bundled Python scripts (standard library only).
   In Claude.ai and Claude Desktop it gives the user the commands to run and reads the output.
-  The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADT is optional.
+  The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADK is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.3.0"
+  version: "1.3.1"
 ---
 
 # FileMaker Server security check
@@ -146,7 +146,7 @@ user saves each with **Tools > Save a Copy as XML** into one folder, then run:
 python3 scripts/fms_file_audit.py <folder of .xml exports>
 ```
 
-Claris ADT is **optional**: use it only if it's already installed, to add the blank-password
+Claris ADK is **optional**: use it only if it's already installed, to add the blank-password
 check SaXML can't make. Never ask the user to install it for this.
 
 ### 5. Confirm addresses and judge
@@ -190,8 +190,7 @@ this skill's `metadata.version`. If newer, start the answer with:
 > https://github.com/CadenceUX/cadenceux-fms-security-skill/releases
 
 Skip silently if the fetch fails. If the skill was installed as a plugin, suggest
-`claude plugin update` (or the Plugins page on claude.ai) instead. If `fmp-dev-orchestrator` is
-installed, skip this check: its stack check covers every CadenceUX skill.
+`claude plugin update` (or the Plugins page on claude.ai) instead. If `cadenceux-dx` is installed, skip this check: its stack check covers every CadenceUX skill.
 
 ## Relationship to other skills
 
@@ -200,7 +199,7 @@ installed, skip this check: its stack check covers every CadenceUX skill.
   installs.
 - **claris-filemaker-pro** answers FileMaker function, script step and Data API questions; this
   skill doesn't repeat them.
-- **filemaker-agentic-development** (Claris ADT): optional, and not needed for any step. When
+- **filemaker-agentic-development** (Claris ADK): optional, and not needed for any step. When
   it's already installed, its `fm-cli` skill reads accounts (including whether each has a
   password), privilege sets and extended privileges straight from hosted files (step 4).
 

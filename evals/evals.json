@@ -90,19 +90,19 @@
       ]
     },
     {
-      "id": "file-audit-no-adt",
+      "id": "file-audit-no-adk",
       "mode": "any",
       "prompt": "Can you check the accounts and security settings inside the FileMaker files hosted on my server? I don't have any special tools installed, just FileMaker Pro.",
       "must": [
         "Uses Save a Copy as XML exports (Tools > Save a Copy as XML, with a [Full Access] account) for each hosted file",
         "Runs or gives the fms_file_audit.py command on the folder of exports",
-        "Says no extra tools are needed and does not require Claris ADT",
+        "Says no extra tools are needed and does not require Claris ADK",
         "Checks Guest, auto-login, generic accounts, extended privileges on [Full Access], and passwords typed into scripts",
         "Says blank or weak passwords can't be read from the export (hash only) and the user checks those",
         "Treats the exports as sensitive: scanned locally, not uploaded or shared"
       ],
       "must_not": [
-        "Tells the user to install Claris ADT",
+        "Tells the user to install Claris ADK",
         "Asks for account passwords"
       ]
     },

@@ -42,7 +42,7 @@ When this skill is active, Claude will:
   operating system against their published issues and support dates
 - Audit every hosted file from its Save a Copy as XML export: Guest, auto-login, default and
   generic accounts, extended privileges, Encryption at Rest, reference protection, and passwords
-  typed into scripts (`scripts/fms_file_audit.py`). No extra tools needed; Claris ADT, if you
+  typed into scripts (`scripts/fms_file_audit.py`). No extra tools needed; Claris ADK, if you
   already have it, adds a blank-password check
 - Review the server logs for password spraying, sign-ins from addresses that also failed, ODBC/JDBC connections, attempts on generic accounts, admin sign-ins
   from new addresses, unexpected changes, and bulk record downloads through the Data API or
@@ -64,7 +64,7 @@ When this skill is active, Claude will:
 - Python 3 for the scripts (standard library only).
 - FileMaker Pro and a [Full Access] account, to export each hosted file with
   Tools > Save a Copy as XML for the file audit.
-- Nothing else. Claris ADT is **not required**; if you already have it, Claude uses it to add a
+- Nothing else. Claris ADK is **not required**; if you already have it, Claude uses it to add a
   blank-password check.
 
 In Claude Code, Claude runs the scripts. In Claude.ai or Claude Desktop, Claude gives you the

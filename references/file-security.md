@@ -12,7 +12,7 @@ that nobody needs should be closed and removed from the server.
 
 ## How to read the settings
 
-**No extra tools are needed.** The default route uses only FileMaker Pro and Python. Claris ADT
+**No extra tools are needed.** The default route uses only FileMaker Pro and Python. Claris ADK
 is optional: most FileMaker developers don't have it, so never ask anyone to install it for this
 check. Use it only if it's already in the session.
 
@@ -27,15 +27,15 @@ check. Use it only if it's already in the session.
    privileges by privilege set, Encryption at Rest, reference protection, passwords typed into
    script steps, and credentials in Insert from URL. The exports hold password hashes and every
    script, so scan them locally, never upload them, and delete them when the review is done.
-2. **ADT, only if already installed.** It adds the one thing SaXML can't show: whether an
+2. **ADK, only if already installed.** It adds the one thing SaXML can't show: whether an
    account has a password at all (blank passwords). Use the `fm-cli` skill and `filemaker help
    account` for the exact read command; it reaches hosted files over `fmnet://` and signs in
-   with ADT's own stored credentials, never a password typed into the chat.
+   with ADK's own stored credentials, never a password typed into the chat.
 3. **Guided**, when neither is possible: ask the user to open each file with a [Full Access]
    account and report or screenshot **Manage > Security** (accounts, privilege sets, extended
    privileges) and **File > File Options** (the Open tab). One file at a time.
 
-| Check | SaXML audit | ADT (optional) | Guided |
+| Check | SaXML audit | ADK (optional) | Guided |
 |---|---|---|---|
 | F1 Guest, F2 auto-login, F3 generic names, F5 [Full Access] count | ✅ | ✅ | ✅ |
 | F4 blank passwords | ❌ hash only | ✅ `hasPassword` | ✅ user checks |
@@ -44,7 +44,7 @@ check. Use it only if it's already in the session.
 | F10 reference protection | ✅ | | ✅ |
 | F11 credentials in scripts | ✅ Re-Login and similar, Insert from URL | | partly |
 
-Never ask for account passwords. Without ADT, nothing can read whether a password is blank, so
+Never ask for account passwords. Without ADK, nothing can read whether a password is blank, so
 close the gap instead of testing it: the user sets a new strong password, in Manage > Security,
 on every account whose password nobody can vouch for, starting with Admin, generic and
 [Full Access] accounts. Report F4 as "not verified; closed by resetting" rather than as a pass.

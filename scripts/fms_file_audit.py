@@ -6,7 +6,7 @@ Guest, auto-login (File Options "Log in using"), generic and [Full Access] accou
 extended privileges that open the Data API, OData and XML, Encryption at Rest, file
 reference protection, passwords typed into scripts, and credentials in Insert from URL.
 
-Needs no server connection, no credentials and no Claris ADT: only the exports. Make one
+Needs no server connection, no credentials and no Claris ADK: only the exports. Make one
 per file in FileMaker Pro with Tools > Save a Copy as XML (a [Full Access] account is
 needed), or with the Save a Copy as XML script step, which also runs on FileMaker Server.
 
