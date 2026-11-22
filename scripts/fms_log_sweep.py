@@ -7,7 +7,8 @@
 
 --logs is a folder holding one sub-folder or .zip per server, named for the server (fms1.example.com or
 fms1.example.com.zip); a download folder named <server>-YYYY-MM-DD-HHMMSS also works, and the newest per server is
-used. Each holds that server's Event, Access, fmdapi and fmodata logs. It prints a short summary (about 3 KB) and
+used. Each holds that server's Event, Access, fmdapi and fmodata logs. It prints a short summary (a few KB: the report's
+top and a numbered What to do, as the FMS Scanner app shows them, then the lists behind it) and
 writes everything to --out (default: global-review.json in the current folder). --lookups looks up who owns each
 attacking address (reverse DNS, and RDAP for the busiest); without it nothing leaves this machine.
 
@@ -874,15 +875,101 @@ def stage(logs, work):
         sys.exit(f"No server folders or .zip files in {logs}: put each server's logs in a folder or .zip named for it")
 
 
+def when(t):
+    """'2026-11-22 15:47' -> '22 Nov 2026, 3:47 pm', as the FMS Scanner app shows a time."""
+    try:
+        d = datetime.datetime.strptime(t[:16], "%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return t or ""
+    return f"{d.day} {d:%b %Y}, {d.hour % 12 or 12}:{d:%M} {'am' if d.hour < 12 else 'pm'}"
+
+
+def plural(k, one, many=None):
+    return f"{k:,} {one if k == 1 else (many or one + 's')}"
+
+
+def what_to_do(r):
+    """The report's numbered steps, worst first, worded as the FMS Scanner app words them."""
+    t, s = [], r["summary"]
+    hi = [x for x in r["failed_then_signed_in"] if x["risk"] == "High"]
+    if hi:
+        t.append(f"**Confirm today who signed in to {', '.join(x['account'] + ' on ' + x['server'] for x in hi)}.** Attacking "
+                 f"addresses failed on {'that account' if len(hi) == 1 else 'those accounts'} before the sign-in. If nobody "
+                 "can say, change the password and follow the incident steps.")
+    if r["signed_in"]:
+        who = ", ".join(x["address"] for x in r["signed_in"])
+        t.append(f"**Confirm today who {who} {'is' if len(r['signed_in']) == 1 else 'are'}.** Each tried the names attack tools "
+                 "use and also signed in. If nobody can say, follow the incident steps in references/incident-response.md.")
+    listing = [x["server"] for x in r["servers"] if x.get("file_list_to_outsiders")]
+    if listing:
+        t.append(f"**Turn on Filter Databases** on {', '.join(listing)}. {'It gave' if len(listing) == 1 else 'They gave'} the list "
+                 "of hosted files to addresses that never signed in, and attacks use that list to try every file.")
+    admin = sum(x.get("admin_type", 0) for x in r["attackers"] + r["probes"]) + sum(c.get("admin_type", 0) for c in r["campaigns"])
+    if admin:
+        t.append("**Make sure no account is called admin, administrator, fmadmin, fmsadmin, fmserver, test or guest** on any "
+                 f"server: they were tried {admin:,} times. Give each integration its own account with an unguessable name.")
+    doors = collections.Counter()
+    for x in r["servers"]:
+        for name, k in x.get("doors", []):
+            doors[name] += k
+    total = sum(doors.values())
+    if total and doors["Data API"] * 2 > total:
+        t.append(f"**Most failures came through the Data API** ({round(doors['Data API'] * 100 / total)}%). Turn it off where "
+                 "nothing uses it, or allow only the addresses that do.")
+    if r["campaigns"]:
+        t.append("**Put a rate limiter or WAF in front of the servers.** A campaign's addresses make only a few tries each, so "
+                 "blocking one address at a time can't stop it.")
+    if r["guest"]:
+        files = list(dict.fromkeys(f for g in r["guest"] for f in g["files"]))
+        hosts = list(dict.fromkeys(g["server"] for g in r["guest"]))
+        t.append(f"**Turn off Guest** in {', '.join(files)} on {', '.join(hosts)}.")
+    if r["block"]:
+        t.append("**Block the addresses below** at the firewall, the Block now ones first, once you've made sure none of them "
+                 "is yours.")
+    t.append("Add your own offices and staff with --verified-addresses or --verified-computers, so their failures are left out "
+             "of the next check.")
+    return t
+
+
+def header(r):
+    """The top of the report, as the FMS Scanner app's Global Report shows it."""
+    s, f, lo = r["summary"], r["summary"]["failed_then_signed_in"], r["summary"].get("left_out", {})
+    hosts = r.get("hosts") or []
+    lines = [f"# Global Report: {hosts[0] if len(hosts) == 1 else plural(len(hosts), 'server')}",
+             f"Run {when(r['generated'])} ({r.get('timezone', '')}). The logs cover {when(r['from'])} to {when(r['to'])}. "
+             "Times are this machine's."]
+    if s.get("attacks_from"):
+        lines.append(f"**{when(s['attacks_from'])}** attacks started, from {s['attacks_from_address']} · "
+                     f"**{when(s['attacks_to'])}** last seen, from {s['attacks_to_address']}")
+    if s.get("downloaded_newest"):
+        old = (f". Oldest: {when(s['downloaded_oldest'])}, {s['downloaded_oldest_server']}"
+               if s.get("downloaded_oldest") and s["downloaded_oldest"] != s["downloaded_newest"] else "")
+        lines.append(f"**{when(s['downloaded_newest'])}** newest logs downloaded{old}")
+    lines += [f"**{s['attack_failures']:,}** failed sign-ins that look like attacks, of {s['failures']:,}",
+              f"**{s['attackers']:,}** sustained {'attack' if s['attackers'] == 1 else 'attacks'} · **{s['campaigns']:,}** "
+              f"{'campaign' if s['campaigns'] == 1 else 'campaigns'}, {s['campaign_addresses']:,} addresses · "
+              f"**{s['probes']:,}** smaller probes",
+              f"**{f.get('High', 0):,} / {f.get('Medium', 0):,}** accounts failed, then signed in: high / worth a look",
+              f"**{s['servers_listing_files']:,}** gave out their file list"]
+    if s["signed_in"]:
+        lines.append(f"**!! {plural(s['signed_in'], 'attacking address', 'attacking addresses')} also signed in.** See below, "
+                     f"and confirm today who {'it is' if s['signed_in'] == 1 else 'they are'}.")
+    else:
+        lines.append("✓ None of the attacking addresses ever signed in.")
+    lines.append(f"Left out: {lo.get('verified', 0):,} failures from verified addresses and computers, "
+                 f"{lo.get('private', 0):,} from the servers themselves and private networks.")
+    lines += ["", "## What to do"] + [f"{i}. {x}" for i, x in enumerate(what_to_do(r), 1)]
+    return lines
+
+
 def brief(r, out):
-    """What an Agent reads: the verdict lines and the first SHOWN of each list. The rest stays in the --out file."""
+    """What an Agent reads: the report's top and What to do, as the FMS Scanner app shows them, then the first SHOWN of
+    each list. The rest stays in the --out file."""
     s, lines = r["summary"], []
     add = lines.append
-    add(f"##### FMS global log review: {r['servers_read']} servers, logs {r['from']} to {r['to']} (this machine's time)")
-    add(f"Failed sign-ins: {s['failures']:,}; {s['attack_failures']:,} look like attacks, from {s['attackers'] + s['signed_in'] + s['probes'] + s['campaign_addresses']:,} addresses")
-    left = s.get("left_out", {})
-    if left:
-        add("Left out: " + ", ".join(f"{n:,} from {k} addresses" for k, n in left.items()))
+    for x in header(r):
+        add(x)
+    add("\n# The lists behind it")
 
     def servers(x):
         return ", ".join(f"{h} ({n})" for h, n in x["servers"][:4]) + (f" +{len(x['servers']) - 4} more" if len(x["servers"]) > 4 else "")

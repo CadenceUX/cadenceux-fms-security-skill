@@ -277,6 +277,16 @@ check("command line: the attacker that signed in first is listed as attacked, th
       "## Attacked, then signed in: 2" in p.stdout and "198.51.100.80" in p.stdout and "signed in before the failures started" in p.stdout)
 check("command line: everything is written to --out, and the logs folder is left as it was",
       json.load(open(cli_out))["servers_read"] == 2 and sorted(os.listdir(LOGS)) == before)
+top = p.stdout.split("# The lists behind it")[0]
+check("command line: the report opens as the scanner app's does, with the counts and the sign-in line",
+      top.startswith("# Global Report: 2 servers") and "failed sign-ins that look like attacks, of" in top
+      and "accounts failed, then signed in: high / worth a look" in top and "attacking addresses also signed in" in top)
+todo = top.split("## What to do")[1]
+check("command line: What to do, numbered and worst first, the attackers that signed in first",
+      todo.lstrip().startswith("1. **Confirm today who signed in to admin") and "198.51.100.80" in todo.split("\n3.")[0]
+      and "**Block the addresses below**" in todo and todo.rstrip().splitlines()[-1].endswith("left out of the next check."))
+check("times read as the app shows them", S.when("2026-11-22 15:47") == "22 Nov 2026, 3:47 pm"
+      and S.when("2026-01-05 09:05") == "5 Jan 2026, 9:05 am" and S.when("") == "")
 check("command line: no lookups unless asked", "rdns" not in json.dumps(json.load(open(cli_out))["block"]))
 p2 = subprocess.run([sys.executable, os.path.join(HERE, "fms_log_sweep.py"), "--logs", os.path.join(LOGS, "nowhere")],
                     capture_output=True, text=True)

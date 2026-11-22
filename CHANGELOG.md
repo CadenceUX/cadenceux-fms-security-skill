@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.1] — 2026-11-22
+
+The several-servers review now opens the way the FMS Scanner app's Global Report does.
+
+### Changed
+
+- `scripts/fms_log_sweep.py`: the printed summary starts with the report's top (servers, the
+  period the logs cover, when attacks started and were last seen, the counts, and whether any
+  attacking address signed in) and a numbered What to do, worst first, in the app's own wording.
+  The lists follow. On a 53-server report the summary is about 8 KB.
+- SKILL.md step 7, `references/log-review.md` and `references/scripts.md`: put the top and What
+  to do at the top of the report as printed.
+
+### Verified
+
+- `test_fms_log_sweep.py` 53 of 53 (three new: the top, What to do and its order, the times);
+  `test_fms_scan.py` 58 of 58; `test_service_scan.py` 74 of 74.
+- Run on a stored 53-server Global Report: the same counts and the same seven steps as the app.
+- Evals not re-run: the analysis is unchanged, and the new text is checked by the tests.
+
 ## [1.4.0] — 2026-11-22
 
 Several servers' logs read together, for the attacks no one server shows, and a sign-in counts

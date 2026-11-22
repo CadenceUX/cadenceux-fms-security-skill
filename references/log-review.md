@@ -222,6 +222,12 @@ Each address's reasons say why it's listed ("admin-type names", "24 tries in 10 
 "32 files", "signed in as admin", "signed in before the failures started"). The block list
 puts attackers that signed in first, then sustained attacks, then probes worth blocking.
 
+The printed summary opens with the report's top and a numbered What to do, worst first: who to
+confirm today, Filter Databases on the servers that gave their file list away, generic account
+names, the Data API when most failures came through it, a rate limiter or WAF against campaigns,
+Guest, the block list, and the user's own addresses to leave out next time. Put both at the top
+of the report as printed.
+
 ## Identifying addresses
 
 Never guess who an address belongs to. For each address that matters:

@@ -19,7 +19,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADK is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.4.0"
+  version: "1.4.1"
 ---
 
 # FileMaker Server security check
@@ -197,7 +197,9 @@ one folder, each named for its server (`fms1.example.com/` or `fms1.example.com.
 python3 scripts/fms_log_sweep.py --logs <folder of servers> --out global-review.json
 ```
 
-Read only what it prints (about 3 KB); grep `global-review.json` for one address. Nothing leaves
+Read only what it prints (a few KB); grep `global-review.json` for one address. It opens with the report's top
+(the counts and whether any attacking address signed in) and a numbered What to do, worded for the
+servers' owner: put both at the top of the report as printed, then add what the lists below them show. Nothing leaves
 the machine unless `--lookups` is added, which looks up who owns each attacking address; use it
 only when the user asks. Leave out the user's own offices and staff with
 `--verified-addresses 203.0.113.5,…` or `--verified-computers name,…` once confirmed.
