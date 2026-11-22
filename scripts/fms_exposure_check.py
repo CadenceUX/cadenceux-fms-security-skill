@@ -20,7 +20,11 @@ per path, a pause between connections, at most a few connections at once. Uses
 only the Python standard library.
 
 Usage:
-    python3 fms_exposure_check.py <hostname> [--ports-only | --web-only] [--services-json <path>]
+    python3 fms_exposure_check.py <hostname> [--ports-only | --web-only] [--services-json <path>] [--origin <IP>]
+
+--origin: the server's own address, when a WAF, CDN or proxy answers for the hostname. Checks
+that the server refuses direct connections on 443, 5003 and 2399; if it answers, the WAF can be
+bypassed (Claris, "Lock Down Your FileMaker Server", 6.4).
 
 --services-json writes the services, the operating system and the FileMaker Server
 version as JSON, for fms_service_advisories.py.
@@ -181,6 +185,31 @@ def old_tls(host, port=443):
     return "; ".join(parts) + ("  <-- turn off TLS 1.0 and 1.1" if accepted else "")
 
 
+# Headers that name a WAF, CDN or reverse proxy answering in front of the server
+FRONT_DOORS = (("CF-RAY", "Cloudflare"), ("X-Sucuri-ID", "Sucuri"), ("X-Azure-Ref", "Azure Front Door"),
+               ("X-Amz-Cf-Id", "Amazon CloudFront"), ("X-Akamai-Transformed", "Akamai"), ("X-Iinfo", "Imperva"))
+SERVER_DOORS = (("cloudflare", "Cloudflare"), ("akamai", "Akamai"), ("sucuri", "Sucuri"), ("awselb", "AWS load balancer"),
+                ("bigip", "F5 BIG-IP"), ("imperva", "Imperva"))
+
+
+def front_door(host):
+    """Which WAF, CDN or proxy answers for the hostname, from the response headers; "" when none says so."""
+    try:
+        conn = http.client.HTTPSConnection(host, 443, timeout=TIMEOUT, context=ssl.create_default_context())
+        conn.request("GET", "/", headers={"User-Agent": "fms-exposure-check"})
+        r = conn.getresponse()
+        headers = {k.lower(): v for k, v in r.getheaders()}
+        r.read()
+        conn.close()
+    except (OSError, ssl.SSLError, http.client.HTTPException):
+        return ""
+    for name, who in FRONT_DOORS:
+        if name.lower() in headers:
+            return f"{who} ({name})"
+    server = headers.get("server", "").lower()
+    return next((f"{who} (Server: {headers.get('server')})" for key, who in SERVER_DOORS if key in server), "")
+
+
 def server_header(headers):
     """The Server header, plus X-Powered-By when a page admits to PHP or anything else."""
     powered = headers.get("X-Powered-By", "")
@@ -240,6 +269,7 @@ def main():
     args = sys.argv[2:]
     mode = next((a for a in args if a in ("--ports-only", "--web-only")), "")
     json_out = args[args.index("--services-json") + 1] if "--services-json" in args[:-1] else ""
+    origin = args[args.index("--origin") + 1] if "--origin" in args[:-1] else ""
     try:
         print(f"##### FMS exposure check: {host} ({socket.gethostbyname(host)})")
     except OSError as e:
@@ -263,6 +293,19 @@ def main():
     print(f"\n## HTTP (80): {http_redirect(host)}")
     print(f"## Certificate (443): {certificate(host)}")
     print(f"## HSTS (443): {hsts(host)}")
+    door = front_door(host)
+    if origin:
+        answers = [p for p in (443, 5003, 2399) if probe(origin, p) == "OPEN"]
+        print(f"## Front door (443): {door or 'none named in the headers'}; the server's own address {origin} "
+              + (f"answers on {', '.join(map(str, answers))}  <-- WAF-BYPASS: block direct connections to it, or "
+                 "allow only the WAF's addresses" if answers else "refuses 443, 5003 and 2399 directly"))
+    elif door:
+        print(f"## Front door (443): {door}. Make sure the server's own address refuses direct connections, "
+              "or the WAF can be bypassed: run again with --origin <its IP>")
+    else:
+        print("## Front door (443): no WAF, CDN or proxy named in the headers. Where the Data API, OData or "
+              "WebDirect are public, put a rate limiter or WAF in front, with path rules (for example /fmi/data/ "
+              "only from the web server that uses it)")
     print(f"## Old TLS (443): {old_tls(host)}")
     print("\n## Web paths (GET, no credentials)")
     version = ""

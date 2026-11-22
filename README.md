@@ -32,7 +32,8 @@ When this skill is active, Claude will:
 - Check from outside your network which ports answer (82, FileMaker's and the common services on
   Mac, Windows and Unix servers), what each one gives away before sign-in, whether the TLS
   certificate is trusted, and which FileMaker web paths respond without signing in, including
-  whether the hosted file list is shown to anyone (`scripts/fms_exposure_check.py`)
+  whether the hosted file list is shown to anyone, and whether a WAF or proxy in front can be
+  gone around (`scripts/fms_exposure_check.py`)
 - Walk you through the Admin Console settings that matter, one area at a time, and judge the
   backups against those expectations: how often they run, a copy beyond the server's network,
   and a timed test restore
@@ -44,9 +45,15 @@ When this skill is active, Claude will:
   generic accounts, extended privileges, Encryption at Rest, reference protection, and passwords
   typed into scripts (`scripts/fms_file_audit.py`). No extra tools needed; Claris ADK, if you
   already have it, adds a blank-password check
-- Review the server logs for password spraying, sign-ins from addresses that also failed, ODBC/JDBC connections, attempts on generic accounts, admin sign-ins
-  from new addresses, unexpected changes, and bulk record downloads through the Data API or
-  OData, which leave no failed sign-in (`scripts/fms_logcheck.py`)
+- Review the server logs for password spraying through every door (FileMaker Pro, WebDirect, the
+  Data API, OData, ODBC/JDBC, the Admin Console), sign-ins from addresses that also failed, before
+  or after the failures, one address working file after file, server-wide spikes from rotating
+  addresses, attempts on generic accounts, admin sign-ins from new addresses, unexpected changes,
+  and bulk record reads through the Data API or OData, which leave no failed sign-in
+  (`scripts/fms_logcheck.py`)
+- Read several servers' logs together, when you look after more than one: attackers that also got
+  in somewhere, one address across several servers, campaigns spread thinly across them, and a
+  block list (`scripts/fms_log_sweep.py`)
 - Write a plain-English findings report in tables, written for the server's owner: what to fix
   (ranked Critical to Low, with who owns each fix), what passed, and what wasn't checked; then
   re-test after you fix things

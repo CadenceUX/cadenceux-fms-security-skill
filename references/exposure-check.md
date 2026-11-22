@@ -8,6 +8,7 @@ Server" (installation and configuration guide; KB 000026067), checked 2026-10-31
 - Ports
 - Web paths
 - Certificate
+- Front door and WAF bypass
 - Services and operating system
 - Published issues for the services
 - What can't be seen from outside
@@ -87,6 +88,26 @@ TLS 1.1 handshake on 443. Claris's Security Guide asks for current TLS only. A v
 scanning Mac's own TLS library can't offer is reported as not tested, never as refused, and a
 server that closes the connection is reported as that, not as a clear refusal.
 
+## Front door and WAF bypass
+
+The check reads the response headers on 443 for a WAF, CDN or proxy answering for the hostname
+(Cloudflare, Sucuri, Akamai, Imperva, Azure Front Door, CloudFront, an AWS or F5 load balancer).
+
+- **One is in front:** the server's own address must refuse direct connections, or an attacker
+  goes around the WAF and its rate limits. Run again with `--origin <the server's IP>`: if it
+  answers on 443, 5003 or 2399, that's a `WAF-BYPASS` finding. Allow those ports at the server's
+  firewall only from the WAF's published addresses.
+- **None is named:** where the Data API, OData or WebDirect are public, recommend a rate limiter
+  or WAF in front of 443. FileMaker Server can't allow-list per service, because they all share
+  443; a reverse proxy or WAF can, with path rules: for example `/fmi/data/` only from the web
+  server that uses it, and `/admin-console/` only from management addresses. Claris Connect
+  publishes its outbound addresses for these lists.
+- **Port 5003:** a WAF can't see FileMaker Pro and Go traffic unless HTTPS tunnelling moves it
+  to 443. Otherwise allow-list known locations or require a VPN.
+- **A VPN** takes the server off the internet, which stops these attacks, but it doesn't cover
+  insiders, a compromised VPN, or the APIs public integrations need, and blocking all public
+  traffic breaks Let's Encrypt's HTTP validation.
+
 ## Services and operating system
 
 For every open port, `scripts/fms_service_scan.py` does what any client does before signing in,
@@ -154,7 +175,7 @@ updates (unattended-upgrades, Windows Update, Software Update).
 | Severity | Examples |
 |---|---|
 | Critical | File names listed without sign-in on a server whose files use Guest or auto-login; local-only ports open; VNC asking for no password; Docker API (2375) open; a published issue CVSS 9 or above in a reachable service |
-| High | HTTPS accepts TLS 1.0 or 1.1; Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; PHP answering from outside; remote management ports open; Remote Desktop without Network Level Authentication; default certificate; a database answering the internet; an operating system out of support; a published issue CVSS 7 to 8.9 |
+| High | HTTPS accepts TLS 1.0 or 1.1; Admin Console or third-party admin tool sign-in open to any address; 2399 open and unused, or open to any address while in use; PHP answering from outside; remote management ports open; Remote Desktop without Network Level Authentication; default certificate; a database answering the internet; an operating system out of support; the server answering directly around its WAF (WAF-BYPASS); a published issue CVSS 7 to 8.9 |
 | Medium | HSTS off; Data API, OData, XML or WebDirect answering when unused; 443 or 5003 not allow-listed where clients are known; other open ports nothing intended needs; published issues below CVSS 7 |
 | Low | Default FileMaker Server web page; a service giving away its version, computer or domain name |
 

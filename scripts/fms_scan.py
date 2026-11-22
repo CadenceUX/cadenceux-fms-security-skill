@@ -308,7 +308,8 @@ def draft(r, svc_adv):
     if r["logs_files"]:
         for code, text in (("POSSIBLE-COMPROMISE", "No address failed and then signed in the way attacks do"),
                            ("XDBC", "No failed sign-ins through ODBC/JDBC (2399)"),
-                           ("HIGH-VOLUME", "No bulk record downloads"), ("ADMIN-NEW", "No Admin Console sign-in from a new address")):
+                           ("HIGH-VOLUME", "No bulk record downloads"), ("ADMIN-NEW", "No Admin Console sign-in from a new address"),
+                           ("GUEST-SIGNIN", "No Guest sign-ins")):
             if code not in codes:
                 passed.append(("Logs", "✅ " + text))
     if r["advisories"].get("version") and not r["advisories"].get("issues"):

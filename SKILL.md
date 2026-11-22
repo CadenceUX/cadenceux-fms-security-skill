@@ -1,18 +1,17 @@
 ---
 name: cadenceux-fms-security
 description: >-
-  Runs an interactive security check of a Claris FileMaker Server the user owns or manages:
-  ports, web paths and services exposed to the internet, PHP and XML publishing, server
+  Runs an interactive security check of a Claris FileMaker Server the user owns or manages: ports,
+  web paths and services exposed to the internet, PHP and XML publishing, server
   misconfigurations, known CVEs (live from NVD) for FileMaker Server and its services, accounts
-  and privileges in the hosted files (from Save a Copy as XML exports), every server log for
-  password spraying, Guest and auto-login abuse and bulk downloads, and backups against the data
-  owner's limits on data loss and downtime. Ends with a ranked findings report, and gives
-  containment and restore steps if an attack is under way. Use when asked to security-check,
-  audit, harden, pen test or review the logs of a FileMaker Server, to check
-  whether a server was hit by an automated FileMaker attack or has known CVEs, or when FMS logs
-  (Access.log, Event.log) are shared for review. Not for FileMaker Server installation or
-  upgrades, general FileMaker schema, script or privilege-set design, or servers the user isn't
-  authorised to test.
+  and privileges in the hosted files, every server log for password spraying, Guest and auto-login
+  abuse and bulk downloads, several servers' logs together for attacks no one server shows, and
+  backups against the owner's limits on data loss and downtime. Ends with a ranked findings
+  report, and containment and restore steps if an attack is under way. Use when asked to
+  security-check, audit, harden, pen test or review the logs of a FileMaker Server, to check if a
+  server was hit by an automated FileMaker attack or has known CVEs, or when FMS logs (Access.log,
+  Event.log) are shared for review. Not for FileMaker Server installation or upgrades, general
+  FileMaker schema, script or privilege-set design, or servers the user isn't authorised to test.
 license: CC-BY-4.0
 compatibility: >-
   Designed for Claude Code, where it runs the bundled Python scripts (standard library only).
@@ -20,15 +19,26 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADK is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.3.1"
+  version: "1.4.0"
 ---
 
 # FileMaker Server security check
 
-An interactive check of one FileMaker Server: what the internet can reach, how the server is
+An interactive check of one FileMaker Server (or several servers' logs together): what the internet can reach, how the server is
 set up, how the hosted files are protected, and what the logs show. Built from security reviews
 of production FileMaker Servers during a wave of automated attacks, and from Claris's own
 guidance.
+
+## Requirements
+
+| Kind | Name | Used for | Surfaces |
+|---|---|---|---|
+| CLI | `python3` (standard library only) | Every script in `scripts/` | Claude Code; elsewhere the user runs the command |
+| CLI | `curl`, `nc` | Optional manual re-checks of one port or path (`references/exposure-check.md`) | The user's terminal |
+| CLI | `fmsadmin` | Settings the Admin API doesn't show, run by the user on the server | The server's own terminal |
+| Path | The user's FMS Logs folder or zip (one per server for step 7) | The log review | Any |
+| API | `services.nvd.nist.gov`, `api.osv.dev`, `ubuntu.com` (public; optional `NVD_API_KEY`) | Published issues for FileMaker Server and its services | Claude Code |
+| API | The server's own Admin API | `fms_admin_review.py`, run by the user with their own sign-in | The user's terminal |
 
 ## Rules for every check
 
@@ -78,6 +88,7 @@ FMS security check:
 - [ ] 4. Hosted file security (Save a Copy as XML exports)
 - [ ] 5. Confirm addresses and judge what the scan found
 - [ ] 6. Finish the report and re-test
+- [ ] 7. Several servers: review their logs together (only when there's more than one)
 ```
 
 ### 1. Intake
@@ -174,6 +185,26 @@ server's owner, add the server settings and file audit findings, set owners, and
 `FMS security check - <server> - <YYYY-MM-DD>.md` (or put it in the reply where no files can be
 written). After the user fixes items, re-run `fms_scan.py` and update the Status column. Suggest a
 log check schedule from [references/log-review.md](references/log-review.md).
+
+### 7. Several servers together
+
+When the user looks after more than one server, read their logs together: one address working
+through several servers, rotating-address campaigns spread across them, and attackers that also
+got in somewhere are invisible one server at a time. Ask for each server's Logs folder or zip in
+one folder, each named for its server (`fms1.example.com/` or `fms1.example.com.zip`), then:
+
+```bash
+python3 scripts/fms_log_sweep.py --logs <folder of servers> --out global-review.json
+```
+
+Read only what it prints (about 3 KB); grep `global-review.json` for one address. Nothing leaves
+the machine unless `--lookups` is added, which looks up who owns each attacking address; use it
+only when the user asks. Leave out the user's own offices and staff with
+`--verified-addresses 203.0.113.5,…` or `--verified-computers name,…` once confirmed.
+**Attacked, then signed in** is the one to act on first: an address that tried attack names and
+also signed in, before or after the failures, is a possible compromise until it's confirmed. Read
+"Several servers together" in [references/log-review.md](references/log-review.md) for what each
+list means, and add the results to each server's report.
 
 ## Without code execution
 

@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.4.0] — 2026-11-22
+
+Several servers' logs read together, for the attacks no one server shows, and a sign-in counts
+before or after the failures there too. The log check now judges every door the same way and
+looks at the whole server as well as each address. Server settings, file security and incident
+response follow Claris's "Lock Down Your FileMaker Server" guide (2026-11-06).
+
+### Added
+
+- `scripts/fms_log_sweep.py`: several servers' logs together, from a folder holding one folder or
+  .zip per server. Lists attackers that also signed in, sustained attacks, rotating-address
+  campaigns, probes, accounts that failed then signed in, Guest sign-ins, file lists given to
+  addresses that never signed in, and a block list. Prints about 3 KB and writes everything to
+  `--out`. Nothing leaves the machine unless `--lookups` is given. SKILL.md step 7 and "Several
+  servers together" in `references/log-review.md`.
+- An address that signed in with an admin-type name and tried two or more other attack names is
+  listed as attacked, then signed in, whether the sign-in came before or after its failures.
+- One address working file after file (3+ files in 3+ separate attempts, never signed in, with a
+  name nobody on those servers uses) is listed and blocked, whatever the names. One wrong
+  password across a multi-file solution is one attempt, and a device retrying a real person's
+  saved password isn't counted.
+- Log check: `MANY-DOORS` (3+ connection types from one address); a server-wide section with
+  `SPIKE`, `SPREAD` and `FILE-TARGETED` for rotating-address attacks that stay under every
+  per-address flag; the Data API and OData logs (`fmdapi.log`, `fmodata.log`) for Guest
+  sign-ins, mapping, paging, bursts, file lists and generic accounts, with their findings.
+- Exposure check: `--origin <IP>` and `WAF-BYPASS`, for a server whose own address answers
+  around the WAF, CDN or proxy in front of it.
+- Admin review: the Secure database folder, each script engine's plug-in switch, plug-ins that
+  can run operating-system commands, and idle session timeouts.
+- File audit: extended privileges on [Full Access], integration accounts, re-authentication
+  (`fmreauthenticate10`) and the minimum client version.
+- Published issues: component advisories with no fixed release yet; an NVD API key in
+  `NVD_API_KEY` raises NVD's limit, and a busy NVD is tried once more. Checked 2026-11-19.
+- `references/guides.json`: the pages behind each check, for programs that show them.
+
+### Changed
+
+- More generic account names (fmadmin, root, sa, demo, dataapi and the like): admin failed on
+  49 of 53 of our servers, fmadmin on 32.
+- Server configuration S6, S10, S16 to S18; file security F6, F8, F13, external authentication
+  and replacing Guest and auto-login; incident response: Deny Guest and auto-login server-wide,
+  and the server-side plug-in kill switch.
+- Test logs use made-up names, dates and documentation addresses only.
+
+### Verified
+
+- `validate_skill.py` clean; `cadenceux-github` scanners clean.
+- `test_fms_scan.py` 58 of 58 (four new: signed in before the failures, and file after file with
+  ordinary names); `test_fms_log_sweep.py` 50 of 50; `test_service_scan.py` 74 of 74.
+- Evals: see `evals/results-2026-11-22-v1.4.0.md`.
+
 ## [1.3.1] — 2026-11-19
 
 `cadenceux-dx` replaces the retired `fmp-dev-orchestrator`, and Claris's public FileMaker
@@ -105,8 +156,7 @@ Wording corrections in the changelog and eval notes. No change to the checks.
 
 ## [1.2.0] — 2026-11-03
 
-Log patterns for attacks through ODBC/JDBC, and checks for PHP and XML publishing. With thanks to
-Wim Decorte for the correct pattern to check the logs for these attacks. Built with
+Log patterns for attacks through ODBC/JDBC, and checks for PHP and XML publishing. Built with
 `cadenceux-skill-creator` 2.2.0.
 
 ### Added

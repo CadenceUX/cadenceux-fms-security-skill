@@ -19,7 +19,7 @@ This is a module: it's imported, never run. Standard library only.
 import re
 
 # The flag that decides a finding's wording. SERVER-ITSELF comes first: 127.0.0.1 is a schedule, not an attacker.
-RANK = ["SERVER-ITSELF", "POSSIBLE-COMPROMISE", "SIGNED-IN", "XDBC", "RATE", "MANY-ACCOUNTS", "MANY-FILES",
+RANK = ["SERVER-ITSELF", "POSSIBLE-COMPROMISE", "SIGNED-IN", "XDBC", "RATE", "MANY-ACCOUNTS", "MANY-FILES", "MANY-DOORS",
         "GENERIC/DEFAULT", "NEVER-SUCCEEDED", "BEFORE-ACCESS-LOG"]
 
 FAILED = re.compile(r"^  (\S+)\s+n=(\d+)\s+peak10=(\d+)\s+accts=(\d+) (\[.*?\])(?: \+\d+ more)? files=(\d+) via=(\[.*?\])\s*(.*)$")
@@ -40,6 +40,21 @@ ANY_PORT = re.compile(r"^  (\d+)\s+(OPEN|closed|filtered|error \(.*?\))\s+(.*?)\
 
 WEB = re.compile(r"^  (\S+)\s+(/\S*)\s+(.*?)\s+<-- (.*)$")
 
+SPIKE = re.compile(r"^  (\d{4}-\d\d-\d\d \d\d):00\s+n=(\d+)\s+addresses=(\d+)\s+accts=(\d+)\s+SPIKE(.*)$")
+
+TARGETED = re.compile(r"^  (.+?)\s+n=(\d+)\s+addresses=(\d+)\s+accts=(\d+)\s+FILE-TARGETED(.*)$")
+
+GUEST = re.compile(r"^  (\S+)\s+n=(\d+)\s+(\S+ \S+\.\.\S+ \S+) files=(\[.*?\]) via=(\[.*?\]) (GUEST.*)$")
+
+API_ROW = re.compile(r"^  (\S+)\s+calls=(\d+)\s+records=(\d+)\s+layouts=(\d+)\s+peak10=(\d+)\s+paged=(\d+)\s+filelist=(\d+)\s+"
+                     r"layoutlist=(\d+)\s+failed=(\d+)\s+users=(\[.*?\]) (\S+ \S+\.\.\S+ \S+) (.*)$")
+
+API_LISTERS = re.compile(r"^  FILE-LIST (\d+) addresses (.*?), and (\d+) then failed to sign in\. The busiest: (\S+) (.*)$")
+
+# A Data API or OData address's most serious flag decides its finding. GUEST is raised once, from Access.log when it's there.
+API_CODES = [("GUEST", "GUEST-SIGNIN"), ("MAPPED", "API-MAPPED"), ("BURST", "BURST"), ("PAGING", "API-PAGING"),
+             ("FILE-LIST", "API-FILE-LIST"), ("GENERIC/DEFAULT", "API-GENERIC")]
+
 def plural(n, word, words=None):
     return f"{n} {word if n == 1 else words or word + 's'}"
 
@@ -59,7 +74,7 @@ def sections(text):
     return found
 
 def parse_logcheck(text, warnings):
-    findings = []
+    findings, guests = [], set()
     for heading, body in sections(text):
         if heading.startswith("Failed FileMaker sign-ins"):
             m = re.search(r"from (\d+) addresses", heading)
@@ -75,6 +90,57 @@ def parse_logcheck(text, warnings):
                                         f"names {names}, {files} files, via {via}. {flags}".strip(), ip, names, flags))
             if m and int(m.group(1)) != parsed:
                 warnings.append(f"Failed sign-ins: the check reported {m.group(1)} addresses, {parsed} were read")
+        elif heading.startswith("Server-wide failed sign-ins"):
+            for line in body:
+                f = SPIKE.match(line)
+                if f:
+                    hour, n, ips, accts, rest = f.groups()
+                    findings.append(finding("logs", "SPIKE", f"{hour}:00: {n} failed sign-ins in the hour from {ips} "
+                                            f"addresses and {accts} account names, against the server's normal hour."
+                                            f"{rest}".strip(), flags="SPIKE" + (" SPREAD" if "SPREAD" in rest else "")))
+                    continue
+                f = TARGETED.match(line)
+                if f:
+                    name, n, ips, accts, rest = f.groups()
+                    findings.append(finding("logs", "FILE-TARGETED", f"{name}: {n} failed sign-ins from {ips} addresses "
+                                            f"with {accts} account names{rest}", flags="FILE-TARGETED"))
+        elif heading.startswith("Guest sign-ins"):
+            m = re.search(r"from (\d+) addresses", heading)
+            parsed = 0
+            for line in body:
+                f = GUEST.match(line)
+                if f:
+                    parsed += 1
+                    ip, n, when, files, via, flags = f.groups()
+                    guests.add(ip)
+                    findings.append(finding("logs", "GUEST-SIGNIN", f"{plural(int(n), 'Guest sign-in')}, {when}, files {files}, via {via}. "
+                                            f"{flags}", ip, "[Guest]", flags))
+            if m and int(m.group(1)) != parsed:
+                warnings.append(f"Guest sign-ins: the check reported {m.group(1)} addresses, {parsed} were read")
+        elif heading.startswith("Data API and OData requests"):
+            m = re.search(r"(\d+) flagged", heading)
+            parsed = 0
+            for line in body:
+                f = API_ROW.match(line)
+                if f:
+                    parsed += 1
+                    ip, calls, records, layouts, peak, paged, lists, layout_lists, failed, users, when, flags = f.groups()
+                    code = next((c for flag, c in API_CODES if flag in flags.split()), "")
+                    if code == "GUEST-SIGNIN" and ip in guests:
+                        code = next((c for flag, c in API_CODES[1:] if flag in flags.split()), "")
+                    if code:
+                        findings.append(finding("logs", code, f"{plural(int(records), 'record call')} from "
+                                                f"{plural(int(layouts), 'layout')}, peak {peak} in 10 minutes, "
+                                                f"{plural(int(paged), 'later page')}, {plural(int(lists), 'file list')}, "
+                                                f"{plural(int(layout_lists), 'layout list')}, {plural(int(failed), 'failed call')}, "
+                                                f"accounts {users}, {when}. {flags}", ip, users, flags))
+                    continue
+                f = API_LISTERS.match(line)
+                if f and int(f.group(3)):
+                    findings.append(finding("logs", "API-FILE-LIST", f"{f.group(1)} addresses {f.group(2)}, and {f.group(3)} then "
+                                            f"failed to sign in. The busiest: {f.group(4)} {f.group(5)}"))
+            if m and int(m.group(1)) != parsed:
+                warnings.append(f"Data API and OData: the check reported {m.group(1)} flagged addresses, {parsed} were read")
         elif heading.startswith("ODBC/JDBC connections"):
             m = re.search(r"from (\d+) addresses", heading)
             parsed = 0
@@ -126,6 +192,9 @@ def parse_logcheck(text, warnings):
 def parse_exposure(text):
     findings = []
     for line in text.splitlines():
+        if line.startswith("## Front door") and "WAF-BYPASS" in line:
+            findings.append(finding("exposure", "WAF-BYPASS", line[3:].split("  <--")[0].strip()))
+            continue
         f = PORT.match(line)
         if f:
             findings.append(finding("exposure", "PORT-OPEN", f"Port {f.group(1)} is open: {f.group(2)} [{f.group(3)}]"))

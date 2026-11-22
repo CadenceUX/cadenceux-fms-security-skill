@@ -1,0 +1,96 @@
+{
+  "about": "The pages behind each check a scan makes, shown on Admin > Guides. Check links on that page tests each address. Edit this file to add, move or remove a link; it goes out with the skill.",
+  "checked": "2026-11-22",
+  "groups": [
+    {
+      "group": "Claris security",
+      "items": [
+        {
+          "title": "Claris FileMaker Security Guide",
+          "url": "https://help.claris.com/en/security-guide/content/index.html",
+          "note": "Claris's best practices for configuring security. A scan's settings check compares each server with it"
+        },
+        {
+          "title": "Claris Security Guide: Security for server administrators",
+          "url": "https://help.claris.com/en/security-guide/content/security-for-server-administrators.html",
+          "note": "The part about FileMaker Server and the machine it runs on"
+        },
+        {
+          "title": "Claris: FileMaker security information",
+          "url": "https://support.claris.com/s/article/FileMaker-Security-Information?language=en_US",
+          "note": "Claris's list of security updates"
+        },
+        {
+          "title": "Claris: Protecting FileMaker Server from automated attacks",
+          "url": "https://support.claris.com/s/article/Protecting-FileMaker-Server-from-automated-attacks?language=en_US"
+        },
+        {
+          "title": "Claris: FileMaker Server release notes",
+          "url": "https://help.claris.com/en/server-release-notes/content/"
+        }
+      ]
+    },
+    {
+      "group": "The APIs a scan uses or checks",
+      "items": [
+        {
+          "title": "Claris: FileMaker Admin API guide",
+          "url": "https://help.claris.com/en/admin-api-guide/content/index.html",
+          "note": "How a scan signs in to the server"
+        },
+        {
+          "title": "Claris: List of Admin API calls",
+          "url": "https://help.claris.com/en/admin-api-guide/content/admin-api-calls.html",
+          "note": "No call here lists or downloads log files, which is why logs come through OttoFMS"
+        },
+        {
+          "title": "OttoFMS REST API",
+          "url": "https://docs.ottomatic.cloud/docs/ottofms-api/introduction",
+          "note": "Where a scan downloads the logs from. Needs OttoFMS 4.18.0 or later"
+        },
+        {
+          "title": "Claris: FileMaker Data API guide",
+          "url": "https://help.claris.com/en/data-api-guide/content/index.html",
+          "note": "Reported when the Data API answers on port 443"
+        },
+        {
+          "title": "Claris: FileMaker OData API guide",
+          "url": "https://help.claris.com/en/odata-guide/content/index.html",
+          "note": "Reported when OData answers on port 443"
+        }
+      ]
+    },
+    {
+      "group": "Logs a scan can't fetch",
+      "items": [
+        {
+          "title": "Claris: Viewing and downloading log files",
+          "url": "https://help.claris.com/en/server-help/content/monitor-log-files.html",
+          "note": "Without OttoFMS, download the logs from Admin Console and scan the saved logs. A scan without logs reads Partial"
+        },
+        {
+          "title": "The nginx access log and fac.log aren't in OttoFMS's log list, so scans don't read them. Check them on the server"
+        }
+      ]
+    },
+    {
+      "group": "Community",
+      "items": [
+        {
+          "title": "Proof: OttoFMS security updates, November 2026",
+          "url": "https://www.proof.sh/blog/ottofms-security-updates-nov-2026",
+          "note": "Test the log download again after updating OttoFMS"
+        }
+      ]
+    },
+    {
+      "group": "Vulnerabilities",
+      "items": [
+        {
+          "title": "NVD: published FileMaker vulnerabilities (CVEs)",
+          "url": "https://nvd.nist.gov/vuln/search?keyword=FileMaker&resultType=records"
+        }
+      ]
+    }
+  ]
+}

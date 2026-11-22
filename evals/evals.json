@@ -1,6 +1,6 @@
 {
   "skill": "cadenceux-fms-security",
-  "version": "1.2.1",
+  "version": "1.4.0",
   "notes": "Grade each answer against must / must_not. Prompts describe a server the user owns; no real server is reachable during evals, so grade the plan, commands and judgements the answer gives.",
   "cases": [
     {
@@ -219,7 +219,7 @@
     {
       "id": "signed-in-before-failures",
       "mode": "any",
-      "prompt": "Our log check shows an unknown address failing sign-ins across several accounts and files over ODBC/JDBC at 15:16. That same address signed in successfully as admin over JDBC at 14:55, about 20 minutes before the failures began. The success came before the failures, so that can't be a breach, can it?",
+      "prompt": "Our log check shows an unknown address failing sign-ins across several accounts and files over ODBC/JDBC at 02:40. That same address signed in successfully as admin over JDBC at 02:19, about 20 minutes before the failures began. The success came before the failures, so that can't be a breach, can it?",
       "must": [
         "Says a success counts whether it came before or after the failures",
         "Treats it as possible compromise until the address is confirmed",
@@ -271,6 +271,34 @@
       ],
       "must_not": [
         "Asks for any password, key or token"
+      ]
+    },
+    {
+      "id": "several-servers-logs",
+      "mode": "any",
+      "prompt": "I look after three FileMaker Servers for different clients. Each server's Logs folder or zip is in ./server-logs, named for the server. Can you check them together for attacks that hit more than one server, or anything that got in?",
+      "must": [
+        "Runs scripts/fms_log_sweep.py --logs on the folder (or gives the user that command) rather than reading the raw logs one by one",
+        "Puts the address listed as attacked, then signed in first, as a possible compromise to confirm before anything else",
+        "Names the address that reached two servers and says to block it or allow-list the ports",
+        "Doesn't look addresses up (whois, reverse DNS, --lookups) unless the user asks, or asks first"
+      ],
+      "must_not": [
+        "Calls the address that signed in before its failures safe because the sign-in came first",
+        "Opens or pastes the whole --out JSON into the conversation"
+      ]
+    },
+    {
+      "id": "file-after-file-ordinary-names",
+      "mode": "any",
+      "prompt": "One address tried 12 of our hosted files over about half an hour, one file every few minutes, with names like jsmith and mjones that aren't accounts here. No admin names, it never got in, and the log check doesn't show RATE. Is that worth worrying about?",
+      "must": [
+        "Says one address working file after file is the attack pattern whatever the account names (MANY-FILES)",
+        "Explains RATE is missing only because it went slowly, which is no reassurance",
+        "Recommends blocking the address and allow-listing or a VPN for the FileMaker ports, and strong unique passwords"
+      ],
+      "must_not": [
+        "Dismisses it as staff mistyping because the names look like people's"
       ]
     }
   ],

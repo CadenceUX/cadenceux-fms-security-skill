@@ -1,7 +1,7 @@
 # FileMaker security advisories
 
 Published security issues in FileMaker Server and FileMaker Pro, which releases fix them, and
-how to match them to a version. Checked **2026-10-31**. The data lives in `advisories.json` (next to
+how to match them to a version. Checked **2026-11-19**. The data lives in `advisories.json` (next to
 this file) and is refreshed live from NVD by `scripts/fms_advisories.py`.
 
 ## Contents
@@ -10,6 +10,7 @@ this file) and is refreshed live from NVD by `scripts/fms_advisories.py`.
 - Latest releases
 - CVEs
 - Security fixes in the release notes
+- Component advisories without a fix yet
 - FileMaker Pro clients
 - FileMaker Cloud
 - Rules for reporting
@@ -23,6 +24,12 @@ issue: the full list is long. If NVD can't be reached the script uses the bundle
 old it is. Without code execution, fetch
 `https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=FileMaker` and read the newest
 entries, or use the tables below and state their date.
+
+NVD's API answers without a key, limited to 5 requests in 30 seconds, and is often slow or busy (503).
+With a free key from `https://nvd.nist.gov/developers/request-an-api-key` in the `NVD_API_KEY`
+environment variable, `fms_advisories.py` and `fms_service_advisories.py` send it, to NVD only, and the
+limit is 50 in 30 seconds. Both scripts try NVD once more after a 403, 429 or 5xx. Never write the key
+into a report, a file the user shares, or a command line.
 
 Also check Claris's release notes
 (https://help.claris.com/en/server-release-notes/content/) for a release newer than those
@@ -45,9 +52,9 @@ remote code execution or an authorisation bypass is High, anything else Medium.
 
 ## Latest releases
 
-| Line | Latest at 2026-10-31 | Notes |
+| Line | Latest at 2026-11-19 | Notes |
 |---|---|---|
-| 26 | 26.0.3 | Current line |
+| 26 | 26.0.3 | Current line. A 26.1.x server is ahead of Claris's public release notes (a pre-release): report it as such, not as unknown |
 | 22 | 22.0.7 | Several 2026 CVEs list a fix only in 26.0.x |
 | 21 | 21.1.8 | Oldest line still receiving fixes |
 | 20 and older | — | Unsupported: no security fixes |
@@ -81,12 +88,29 @@ lines Claris names.
 | Fix | Fixed in |
 |---|---|
 | Path traversal to remote code execution through system-level script schedules; Admin Console tokens moved out of local storage | 22.0.6, 21.1.8 |
+| Security updates: Apache Tomcat 10.1.54, Node.js 22.23.1 | 22.0.7 |
 | Tomcat CVE-2025-31650, -55752, -55754, -61795; Admin Console path traversal | 22.0.5, 21.1.7 |
 | Two further authenticated-administrator code-execution fixes; SameSite cookies | 26.0.1 |
 | Linux: ImageMagick CVE-2025-55004 | 26.0.3 |
 | Denial-of-service hardening; clients older than 21.0.1 blocked | 22.0.1 |
 | Admin roles could exceed their privileges | 21.1.5 |
 | Admin Console Restrict Access bypass with a forged X-Forwarded-For header | 21.0.1 |
+
+## Component advisories without a fix yet
+
+Claris articles on components bundled with FileMaker Server (`component_advisories` in
+`advisories.json`). No release fixes them yet, so they're listed in every report for the
+servers they apply to, never matched to a version. When Claris names the fixing release, move
+the entry to the release-note fixes.
+
+| Advisory | Applies to | What to do |
+|---|---|---|
+| Node.js, KB 000049227 | The Admin Console, Admin API and Data API (not FileMaker Pro, Go or WebDirect's core). Claris rates the risk low | Restrict the Admin Console (ports 16000 and 443) to trusted networks and VPNs; strong Admin Console and Admin API passwords; apply the maintenance release when it ships |
+| Apache Tomcat, KB 000049229 | The bundled Web Publishing Engine. No known exploitable exposure in recommended deployments | Don't replace the bundled Tomcat files by hand; apply 26.1.1 when it's released |
+
+Claris's attack article, KB 000049228 ("Protecting FileMaker Server from automated attacks"),
+and its guide "Lock Down Your FileMaker Server" (2026-11-06) are the sources for the server
+and file checks, not for version matching.
 
 ## FileMaker Pro clients
 

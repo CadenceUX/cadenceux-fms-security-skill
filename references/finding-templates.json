@@ -54,6 +54,24 @@
   "todo": "Allow-list ports 443 and 2399 or use a VPN, and check the account names tried."
  },
  {
+  "code": "SPIKE",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "A spike in failed sign-ins across the server",
+  "why": "An hour with several times the server's normal failed sign-ins is automated guessing. The attacks rotate addresses, one or two tries each, so no single address stands out. SPREAD means most of that hour's addresses failed only once or twice.",
+  "todo": "Check the Access and Data API logs for any success from that hour's addresses. Allow-list ports 443 and 2399 or use a VPN, and put a rate limiter or WAF in front of 443."
+ },
+ {
+  "code": "FILE-TARGETED",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "Many accounts or addresses failing on one file",
+  "why": "Five or more account names, or five or more addresses, failing on the same file is a search for a way in, even when each address tries only once.",
+  "todo": "Make sure the file has no Guest, auto-login or generic accounts and only strong passwords, and check its sign-ins in the Access log."
+ },
+ {
   "code": "MANY-ACCOUNTS",
   "priority": "High",
   "order": 2,
@@ -70,6 +88,15 @@
   "title": "One address tried three or more files",
   "why": "Attack tools work through every hosted file they can list.",
   "todo": "Use strong unique passwords, and allow-list ports 443 and 2399 or use a VPN."
+ },
+ {
+  "code": "MANY-DOORS",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "One address tried three or more ways in",
+  "why": "Attack tools try every door the server has: FileMaker Pro's port, WebDirect, the Data API, OData, ODBC/JDBC and the Admin Console. Staff use one or two.",
+  "todo": "Block the address. Close or allow-list the doors nobody uses, and turn off the services behind them."
  },
  {
   "code": "GENERIC/DEFAULT",
@@ -196,6 +223,15 @@
   "title": "A port that should be closed is open",
   "why": "Local-only and remote-access ports shouldn't answer from the internet. Port forwarders can show ports open when nothing is listening, so confirm on the server.",
   "todo": "Close it at the firewall, or restrict it to known addresses."
+ },
+ {
+  "code": "WAF-BYPASS",
+  "priority": "High",
+  "order": 2,
+  "weighs": "None",
+  "title": "The server answers directly, around its WAF",
+  "why": "A WAF or CDN answers for the hostname, but the server's own address also accepts connections, so an attacker can skip the WAF and its rate limits by connecting to that address.",
+  "todo": "At the server's firewall, allow 443, 5003 and 2399 only from the WAF's published addresses (and your own), and block everything else."
  },
  {
   "code": "SIGN-IN-PAGE-OPEN",
@@ -430,5 +466,50 @@
   "title": "The server gives away its computer and domain names",
   "why": "Remote Desktop and file sharing answer the first step of a sign-in with the computer and domain names. Attackers use them to aim password spraying.",
   "todo": "Close Remote Desktop and file sharing to the internet, or allow them only over a VPN."
+ },
+ {
+  "code": "GUEST-SIGNIN",
+  "priority": "Critical",
+  "order": 1,
+  "weighs": "Compromise",
+  "title": "Someone signed in as Guest",
+  "why": "Guest needs no password, so these sign-ins never show as failures. Through WebDirect, the Data API or OData, anyone who can reach the server can do the same. Claris's lockdown guide says any Guest sign-in through an API needs an alert.",
+  "todo": "Turn Guest off in the files named, or take every extended privilege but fmapp off the Guest privilege set. Then confirm who this address is and what they could see."
+ },
+ {
+  "code": "API-MAPPED",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "An address listed the layouts, then read records from many of them",
+  "why": "This is the shape of the attacks in Claris's lockdown guide: ask for the files, ask for the layouts, then pull records from each one in turn.",
+  "todo": "Confirm which integration this is and that its account should see those layouts. If nobody can, change that account's password and treat it as possible compromise."
+ },
+ {
+  "code": "API-PAGING",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Compromise",
+  "title": "Page after page of records through the Data API or OData",
+  "why": "The attacks download whole tables a page at a time. A sync integration does the same, so the address and account decide which it is.",
+  "todo": "Confirm which integration this is. Give its account only the layouts it needs. If nobody can say, treat it as possible compromise."
+ },
+ {
+  "code": "API-FILE-LIST",
+  "priority": "High",
+  "order": 2,
+  "weighs": "Attempted",
+  "title": "Addresses asked for the list of hosted files, then tried to sign in",
+  "why": "Attack tools ask the Data API or OData for the file names first, then try account names on each file. Rotating addresses each make only a few calls.",
+  "todo": "Turn on Filter Databases so the list is empty without sign-in. Check the failed sign-ins from these addresses, and consider a rate limiter or WAF in front of the server."
+ },
+ {
+  "code": "API-GENERIC",
+  "priority": "Medium",
+  "order": 3,
+  "weighs": "None",
+  "title": "The Data API or OData signed in with a generic account name",
+  "why": "Names like admin, api or web are the first ones attackers try, and this account works from the internet.",
+  "todo": "Give the integration its own account with an unguessable name and a long password, and a privilege set limited to the layouts it needs."
  }
 ]

@@ -37,6 +37,10 @@ OLDEST_SUPPORTED = 21
 RISKY_EXTPRIV = {"fmrest": "Data API", "fmodata": "OData", "fmxml": "XML", "fmxdbc": "ODBC/JDBC",
                  "fmphp": "PHP"}
 GENERIC = {"[guest]", "guest", "admin", "administrator", "web", "user", "api", "test", ""}
+# Plug-ins that can run operating-system commands, so a compromised file can reach the machine through them
+# (Claris, "Lock Down Your FileMaker Server", section 2): BaseElements (BE_ExecuteSystemCommand), MBS (Shell),
+# ScriptMaster (Groovy/Java)
+OS_PLUGINS = re.compile(r"baseelements|mbs|monkeybread|scriptmaster|360works", re.I)
 
 results = []
 
@@ -213,6 +217,23 @@ def review(api):
             report("REVIEW", "Encryption", f"{name}: not encrypted at rest")
     if not dbs:
         report("INFO", "Files", "no hosted files reported")
+    # The Secure database folder (Claris, "Lock Down Your FileMaker Server", 4.2): files placed there always get
+    # RequireSecureDB and DenyGuestAndAutoLogin, whatever the server-wide settings say, and must be encrypted at rest.
+    folders = api.get("/server/currentfoldersettings") or {}
+    secure = str(folders.get("secureDatabaseFolder") or "")
+    if dbs and secure:
+        inside = [d.get("filename", "?") for d in dbs if str(d.get("folder") or "").startswith(secure)]
+        outside = [d for d in dbs if not str(d.get("folder") or "").startswith(secure)]
+        if not outside:
+            report("PASS", "Secure folder", f"all {len(dbs)} files are in the Secure folder: Guest and auto-login "
+                   "are refused for them whatever the server settings say")
+        else:
+            ready = [d.get("filename", "?") for d in outside if d.get("isEncrypted")]
+            report("REVIEW", "Secure folder",
+                   f"{len(inside)} of {len(dbs)} files in the Secure folder. Files there always refuse Guest and "
+                   "auto-login and must be encrypted at rest. Unless DenyGuestAndAutoLogin is on, move the exposed "
+                   "files there" + (f"; already encrypted, so ready to move: {', '.join(ready[:10])}" if ready else
+                                    "; none outside it is encrypted yet"))
 
     for c in (api.get("/clients") or {}).get("clients", []):
         for g in c.get("guestFiles", []):
@@ -236,7 +257,52 @@ def review(api):
     plugins = [p.get("pluginName") or p.get("filename") for p in
                (api.get("/plugins") or {}).get("plugins", []) if p.get("enabled")]
     if plugins:
-        report("INFO", "Plug-ins", f"enabled: {', '.join(map(str, plugins))}")
+        shell = [str(p) for p in plugins if OS_PLUGINS.search(str(p))]
+        report("REVIEW" if shell else "INFO", "Plug-ins", f"enabled: {', '.join(map(str, plugins))}"
+               + (f". {', '.join(shell)} can run operating-system commands: keep it only if a server-side script "
+                  "needs it, and protect the files with fmplugin" if shell else ""))
+    # Each of the three script engines has its own plug-in switch (Admin Console > Connectors > Plug-ins). Off is the
+    # kill switch when nothing server-side needs plug-ins; "allow install" lets a script put a plug-in on the server.
+    engines = (("/plugins/DbsPluginConfig", "usePlugins", "allowInstallPlugin", "Script Engine (schedules, PSoS, OData)"),
+               ("/plugins/WpePluginConfig", "iwpEnablePlugins", "iwpAllowInstallPlugins", "Web Publishing (WebDirect)"),
+               ("/plugins/DAPIPluginConfig", "DAPIEnablePlugins", "DAPIAllowInstallPlugins", "Data API"))
+    on_engines, installable = [], []
+    for path, use, install, name in engines:
+        cfg = (api.get(path) or {}).get("config")
+        if not isinstance(cfg, dict):
+            continue
+        if cfg.get(use):
+            on_engines.append(name)
+        if cfg.get(install):
+            installable.append(name)
+    if on_engines:
+        report("REVIEW", "Plug-ins", f"plug-ins on for: {', '.join(on_engines)}. Turn off each engine nothing "
+               "server-side needs (a restart is needed for Web Publishing and the Data API)")
+    if installable:
+        report("REVIEW", "Plug-ins", f"scripts may install plug-ins on the server for: {', '.join(installable)}; "
+               "turn that off unless a deployment needs it")
+
+    # Session timeouts: with fmreauthenticate10 in each privilege set, they disconnect idle users
+    progo = api.get("/fmclients/sessiontimeout/progo") or {}
+    if "enableProGoTimeout" in progo:
+        report("PASS" if progo.get("enableProGoTimeout") else "REVIEW", "Idle users",
+               f"FileMaker Pro and Go sessions time out after {progo.get('sessionTimeout')} minutes idle"
+               if progo.get("enableProGoTimeout") else
+               "FileMaker Pro and Go sessions never time out: turn on the idle timeout, with fmreauthenticate10 "
+               "in each privilege set")
+
+    # Copies off the server's network and a standby (both FileMaker Server 26.0.1 and later)
+    drives = (api.get("/remotebackup/drives") or {}).get("drives")
+    if isinstance(drives, list):
+        ok = [d.get("name", "?") for d in drives if str(d.get("status", "")).upper() == "CONNECTED"]
+        report("PASS" if ok else "REVIEW", "Remote backup",
+               f"Remote Backup drive connected: {', '.join(ok)}" if ok else
+               "no Remote Backup drive connected: it keeps a copy off the server's network every 20 minutes "
+               "(set up in Claris Customer Console). Without it, make sure another copy is off this network")
+    role = (api.get("/standby/serverrole") or {}).get("serverRole")
+    if role:
+        report("INFO", "Standby", f"this server's role: {role}. A standby protects against hardware or site loss, "
+               "not a compromise: data and settings are replicated to it too")
 
     # Perform Script on Server: Claris says set script sessions to 0 unless the solution uses it
     general = api.get("/server/config/general") or {}

@@ -3,9 +3,11 @@
 
 Reads a folder of FileMaker Server logs (or the .zip they came in) and reports:
 new addresses, failed sign-ins with warning flags, addresses that failed and
-also signed in, ODBC/JDBC connections, Admin Console sign-ins, security and
-file events, Admin API errors, bursts of record downloads, and outside requests
-to FileMaker, PHP and XML web paths. Uses only the Python standard library.
+also signed in, Guest sign-ins, ODBC/JDBC connections, Admin Console sign-ins,
+security and file events, Admin API errors, bursts of record downloads, what
+each address did through the Data API and OData (fmdapi.log, fmodata.log: file
+and layout lists, paging, Guest), and outside requests to FileMaker, PHP and XML
+web paths. Uses only the Python standard library.
 
 Usage:
     python3 fms_logcheck.py <log folder or .zip> [since] [--brief] [--save <file>]
@@ -18,7 +20,7 @@ Usage:
     --save      also write the full output to this file, to search when a line is needed.
 
 Examples:
-    python3 fms_logcheck.py ~/Downloads/server-logs.zip
+    python3 fms_logcheck.py server-logs.zip
     python3 fms_logcheck.py ./Logs "2026-10-28 01:00"
 
 Read-only: it never changes the logs. A .zip is extracted to a temporary folder.
@@ -35,19 +37,39 @@ import sys
 import tempfile
 import zipfile
 
-GENERIC = {"", "admin", "administrator", "web", "webuser", "user", "api", "apiuser",
-           "test", "guest", "[guest]", "filemaker", "fmsadmin", "fmserver", "website"}
+# Account names attackers try first, on any server. From the attacks in Claris's lockdown guide and the names that
+# failed on many of our own servers from addresses that never signed in: admin on 49 of 53, fmadmin on 32.
+GENERIC = {"", "admin", "administrator", "adm", "root", "sa", "sysadmin", "superuser", "manager", "owner", "master",
+           "support", "developer", "dev", "demo", "test", "testuser", "user", "guest", "[guest]", "web", "webuser",
+           "website", "api", "apiuser", "dataapi", "fmrest", "fmodata", "odbc", "jdbc", "filemaker", "fm", "fmadmin",
+           "fmsadmin", "fmserver", "fmuser"}
+# The doors a failed sign-in can come through: the bracket in Event.log, and the Admin Console's own line
+DOORS = {"fmapp": "FileMaker Pro/Go", "fmwebdirect": "WebDirect", "fmrest": "Data API", "fmodata": "OData",
+         "fmxdbc": "ODBC/JDBC", "fmxml": "XML", "fmphp": "PHP", "admin-console": "Admin Console"}
+MANY_DOORS = 3        # connection types one address fails through; staff use one or two (Pro and WebDirect)
 IP = r"(\d+\.\d+\.\d+\.\d+|[0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7})"
 LOCAL = {"127.0.0.1", "::1"}
 DOWNLOAD_MB = 20      # per client per 10 minutes; busy production servers peaked near 6 MB
 WIDE_TABLES = 40      # developers reach 60+ tables, so WIDE needs a NEW or GUEST/GENERIC client too
 FAIL_RATE = 20        # failures per address per 10 minutes; a person retrying rarely passes this on more than one name
 API_CALLS = 100       # Data API / OData record calls per address per 10 minutes (attackers page 200 at a time)
+API_LAYOUTS = 5       # layouts (or OData tables) one address reads records from: in 10 minutes for BURST, in all for MAPPED
+API_PAGES = 20        # calls for a later page (_offset past 1, $skip past 0) per address per 10 minutes: PAGING
+BRIEF_API = 15        # --brief: Data API and OData addresses shown, the most serious flags first
+# Data API and OData flags, most serious first. NEW is shown but never raised on its own: cloud integrations
+# (Power Automate, Zapier) call from a different address most days.
+API_FLAGS = ["GUEST", "MAPPED", "BURST", "PAGING", "FILE-LIST", "GENERIC/DEFAULT"]
+# Server-wide checks (Claris, "Lock Down Your FileMaker Server", section 5): attackers rotate addresses, one or two
+# calls each, so per-address counts miss them. Alert on the whole server's hourly failure rate against its own normal.
+SPIKE_FACTOR = 4      # an hour with 4x the median hourly failures (Claris suggests starting at 3 to 5 times)...
+SPIKE_MIN = 10        # ...and at least this many, so a quiet server's single typo isn't a spike
+FILE_ACCOUNTS = 6     # different account names failing on one file in one day, from any number of addresses
+FILE_ADDRESSES = 6    # different addresses failing on one file in one day (staff mistyping rarely reach either)
 BRIEF_BUSIEST = 10    # --brief: the busiest connections shown; NEW ones are always shown
 BRIEF_FAILS = 25      # --brief: failed sign-in addresses shown, the most serious flags first
 # The flags that make a failed sign-in address worth reading in --brief, most serious first. NEVER-SUCCEEDED and
 # BEFORE-ACCESS-LOG are on almost every address that fails, so on their own they're only counted.
-BRIEF_FLAGS = ["POSSIBLE-COMPROMISE", "SIGNED-IN", "XDBC", "RATE", "MANY-ACCOUNTS", "MANY-FILES", "GENERIC/DEFAULT",
+BRIEF_FLAGS = ["POSSIBLE-COMPROMISE", "SIGNED-IN", "XDBC", "RATE", "MANY-ACCOUNTS", "MANY-FILES", "MANY-DOORS", "GENERIC/DEFAULT",
                "SERVER-ITSELF"]
 
 FULL, OPTS = [], {"brief": False}
@@ -126,6 +148,182 @@ def main():
                 f.write("\n".join(FULL) + "\n")
 
 
+def server_wide(hourly, by_file, span):
+    """The whole server's failed sign-ins per hour against its own median hour, and files that many accounts or
+    addresses fail on. Catches spraying spread across rotating addresses, which the per-address flags miss."""
+    hours = []
+    if span:
+        t = datetime.datetime.strptime(span[0], "%Y-%m-%d %H")
+        end = datetime.datetime.strptime(span[1], "%Y-%m-%d %H")
+        while t <= end and len(hours) < 24 * 400:
+            hours.append(t.strftime("%Y-%m-%d %H"))
+            t += datetime.timedelta(hours=1)
+    counts = sorted(hourly[h]["n"] if h in hourly else 0 for h in hours)
+    median = counts[len(counts) // 2] if counts else 0
+    limit = max(SPIKE_MIN, SPIKE_FACTOR * median)
+    spikes = [h for h in hours if h in hourly and hourly[h]["n"] >= limit]
+    total = sum(r["n"] for r in hourly.values())
+    out(f"\n## Server-wide failed sign-ins: {total} over {len(hours)} hours, median {median} an hour, "
+        f"{len(spikes)} spike hour(s) at {limit}+")
+    out(f"   Flags: SPIKE ({SPIKE_FACTOR}x the median hour, at least {SPIKE_MIN}), SPREAD (most of that hour's addresses "
+        f"failed only once or twice: rotating addresses), FILE-TARGETED ({FILE_ACCOUNTS}+ accounts or "
+        f"{FILE_ADDRESSES}+ addresses failing on one file in a day). The server's own 127.0.0.1 is left out")
+    for h in spikes[:24]:
+        r = hourly[h]
+        few = sum(1 for n in r["ips"].values() if n <= 2)
+        spread = len(r["ips"]) >= 5 and few >= len(r["ips"]) * 0.6
+        out(f"  {h}:00  n={r['n']:<5} addresses={len(r['ips']):<4} accts={len(r['acct']):<4} SPIKE"
+            + (f" SPREAD ({few} addresses with 1-2 failures)" if spread else ""))
+    if len(spikes) > 24:
+        out(f"  and {len(spikes) - 24} more spike hours")
+    # By file and day: each file's worst day, and how many days were over the line
+    worst, days = {}, collections.Counter()
+    for (name, day), f in by_file.items():
+        if len(f["acct"]) >= FILE_ACCOUNTS or len(f["ips"]) >= FILE_ADDRESSES:
+            days[name] += 1
+            if name not in worst or (len(f["acct"]), len(f["ips"])) > (len(worst[name][1]["acct"]), len(worst[name][1]["ips"])):
+                worst[name] = (day, f)
+    targeted = sorted(worst.items(), key=lambda x: -(len(x[1][1]["acct"]) + len(x[1][1]["ips"])))
+    for name, (day, f) in targeted:
+        out(f"  {name:40} n={f['n']:<5} addresses={len(f['ips']):<4} accts={len(f['acct']):<4} FILE-TARGETED "
+            f"(worst day {day}, {days[name]} day(s) over the line)")
+    if not spikes and not targeted:
+        out("   No spike and no file targeted across addresses in this window")
+
+# Data API and OData request logs. OttoFMS downloads them where the web server's own log isn't available, and they
+# hold what the Claris pattern needs: the file list, then the layouts, then page after page of records from each.
+API_FILE_LIST = re.compile(r"^/fmi/(?:data/[^/]+/databases|odata/v\d+)/?$")
+API_LAYOUT_LIST = re.compile(r"^/fmi/(?:data/[^/]+/databases/[^/]+/layouts|odata/v\d+/[^/$]+(?:/\$metadata)?)/?$")
+API_RECORDS = re.compile(r"^/fmi/(?:data/[^/]+/databases/([^/]+)/layouts/([^/]+)/(?:records|_find)|odata/v\d+/([^/$]+)/([^/$(]+))")
+
+
+def api_time(stamp, offset):
+    """fmdapi.log writes local time ("2026-11-03 10:00:00.000 +1100"); fmodata.log writes UTC ("2026-11-02T23:00:00Z").
+    Both are compared with the window in the server's local time."""
+    if "T" not in stamp[:11]:
+        return stamp[:16]
+    try:
+        t = datetime.datetime.strptime(stamp[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return ""
+    sign = -1 if offset[:1] == "-" else 1
+    return (t + sign * datetime.timedelta(hours=int(offset[1:3]), minutes=int(offset[3:5]))).strftime("%Y-%m-%d %H:%M")
+
+
+def api_requests(logs, since, is_new, seen_before):
+    names = [n for n in ("fmdapi-old.log", "fmdapi.log", "fmodata-old.log", "fmodata.log") if n in logs]
+    if not names:
+        out("\n## Data API and OData requests (fmdapi.log, fmodata.log): not supplied")
+        return
+    offset = "+0000"
+    for l in lines(logs, "Event.log", "fmdapi.log"):
+        m = re.match(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\S* ([+-]\d{4})\t", l)
+        if m:
+            offset = m.group(1)
+            break
+    addr = collections.defaultdict(lambda: dict(n=0, ok=0, failed=0, records=0, layouts=set(), paged=0, files=0, files_ok=0, lists=0, refused=0,
+                                                users=set(), first="", last="", win=collections.Counter(),
+                                                win_layouts=collections.defaultdict(set), win_paged=collections.Counter()))
+    total = 0
+    for name in names:
+        for l in lines(logs, name):
+            f = l.split("\t")
+            if len(f) < 7 or not f[0][:4].isdigit():
+                continue
+            ts = api_time(f[0], offset)
+            ip, user, method, path = f[3], f[4].strip(), f[5].upper(), f[6]
+            if not ts or not ip:
+                continue
+            if ts < since:
+                seen_before.add(ip)
+                continue
+            total += 1
+            bare = path.split("?")[0]
+            r = addr[ip]
+            r["n"] += 1
+            r["first"] = r["first"] or ts
+            r["last"] = max(r["last"], ts)
+            ok = f[1].strip() == "0"
+            r["ok" if ok else "failed"] += 1
+            if ok and user:
+                r["users"].add(user)
+            if method == "GET" and API_FILE_LIST.match(bare):
+                r["files"] += 1
+                r["files_ok"] += ok
+            elif method == "POST" and bare.endswith("/sessions") and not ok:
+                r["refused"] += 1
+            elif method == "GET" and API_LAYOUT_LIST.match(bare):
+                r["lists"] += 1
+            m = API_RECORDS.match(bare)
+            if m and ok and ((m.group(2) and (method == "GET" or bare.endswith("/_find"))) or (m.group(4) and method == "GET")):
+                where = "/".join(x for x in m.groups() if x)
+                win = ts[:15] + "0"
+                r["records"] += 1
+                r["layouts"].add(where)
+                r["win"][win] += 1
+                r["win_layouts"][win].add(where)
+                page = re.search(r"[?&](?:_offset|\$skip)=(\d+)", path)
+                if page and int(page.group(1)) > (1 if "_offset" in page.group(0) else 0):
+                    r["paged"] += 1
+                    r["win_paged"][win] += 1
+    rows = []
+    for ip, r in addr.items():
+        users = {u.lower() for u in r["users"]}
+        peak = max(r["win"].values(), default=0)
+        wide = max((len(v) for v in r["win_layouts"].values()), default=0)
+        flags = []
+        if users & {"[guest]", "guest"}:
+            flags.append("GUEST")
+        if r["lists"] and len(r["layouts"]) >= API_LAYOUTS:
+            flags.append("MAPPED")
+        if peak >= API_CALLS or wide >= API_LAYOUTS:
+            flags.append("BURST")
+        if max(r["win_paged"].values(), default=0) >= API_PAGES:
+            flags.append("PAGING")
+        if r["files"] and not users:
+            flags.append("FILE-LIST")
+        if users & (GENERIC - {"", "guest", "[guest]"}):
+            flags.append("GENERIC/DEFAULT")
+        if is_new(ip):
+            flags.append("NEW")
+        rows.append((ip, r, peak, wide, flags))
+    # Addresses whose only flag is FILE-LIST are one line: internet-wide sweeps list the files from dozens of addresses
+    listers = [x for x in rows if set(x[4]) & set(API_FLAGS) == {"FILE-LIST"}]
+    flagged = [x for x in rows if set(x[4]) & set(API_FLAGS) - {"FILE-LIST"}]
+    out(f"\n## Data API and OData requests ({', '.join(names)}): {total} requests from {len(addr)} addresses, "
+        f"{len(flagged)} flagged")
+    out(f"   Flags: GUEST (signed in as Guest), MAPPED (listed the layouts or tables, then read records from "
+        f"{API_LAYOUTS}+ of them),\n   BURST ({API_CALLS}+ record calls or {API_LAYOUTS}+ layouts in 10 minutes), PAGING "
+        f"({API_PAGES}+ later pages in 10 minutes),\n   FILE-LIST (asked for the list of hosted files and never signed in), "
+        f"GENERIC/DEFAULT account, NEW. Record calls count only when answered")
+    def weight(x):
+        return min((API_FLAGS.index(f) for f in x[4] if f in API_FLAGS), default=len(API_FLAGS))
+    flagged.sort(key=lambda x: (weight(x), -x[1]["records"], -x[1]["n"]))
+    for rank, (ip, r, peak, wide, flags) in enumerate(flagged):
+        users = sorted(hide_typed_password(u) for u in r["users"])
+        out(f"  {ip:40} calls={r['n']:<6} records={r['records']:<6} layouts={len(r['layouts']):<3} peak10={peak:<5} "
+            f"paged={r['paged']:<6} filelist={r['files']:<4} layoutlist={r['lists']:<4} failed={r['failed']:<5} "
+            f"users={users[:4]} {r['first']}..{r['last'][5:]} {' '.join(flags)}", brief=rank < BRIEF_API)
+    if OPTS["brief"] and len(flagged) > BRIEF_API:
+        print(f"   and {len(flagged) - BRIEF_API} more flagged addresses (all in the full output)")
+    if listers:
+        listers.sort(key=lambda x: -x[1]["n"])
+        answered = sum(1 for x in listers if x[1]["files_ok"])
+        tried = sum(1 for x in listers if x[1]["refused"])
+        out(f"  FILE-LIST {len(listers)} addresses asked for the list of hosted files and never signed in, "
+            f"{min(x[1]['first'] for x in listers)}..{max(x[1]['last'] for x in listers)[5:]}: the list was answered for "
+            f"{answered}, and {tried} then failed to sign in. The busiest: "
+            + ", ".join(f"{ip} ({r['files']} list{'s' * (r['files'] != 1)}, {r['refused']} failed sign-in"
+                        f"{'s' * (r['refused'] != 1)})" for ip, r, *_ in listers[:5]))
+    if not flagged and not listers:
+        out("   Nothing flagged")
+    shown = {id(x) for x in flagged + listers}
+    quiet = sorted((x for x in rows if id(x) not in shown), key=lambda x: -x[1]["n"])
+    if quiet:
+        out(f"   Not flagged: {len(quiet)} addresses, the busiest "
+            + ", ".join(f"{ip} ({r['n']} calls, {len(r['layouts'])} layouts)" for ip, r, *_ in quiet[:5]), brief=False)
+
+
 def report(args, save):
     logs = open_logs(args[0])
     if "Access.log" not in logs or "Event.log" not in logs:
@@ -142,6 +340,7 @@ def report(args, save):
     signins = collections.defaultdict(list)   # address -> (time, account, connection type), at any date
     xdbc = collections.defaultdict(lambda: dict(n=0, acct=set(), first=None, last=None))
     via, access_first = {}, None
+    guests = collections.defaultdict(lambda: dict(n=0, files=set(), via=set(), first=None, last=None))
     for l in lines(logs, "Access-old.log", "Access.log"):
         ts, ip = l[:16], ip_of(l)
         if not ip or not ts[:4].isdigit():
@@ -161,6 +360,14 @@ def report(args, save):
         m = re.search(r'opening database .* as "([^"]*)"', l)
         if m:
             signins[ip].append((ts, m.group(1), via.get(ip, "")))
+            g = re.search(r'opening database "([^"]*)" as "\[Guest\]"', l)
+            if g and ts >= since:
+                r = guests[ip]
+                r["n"] += 1
+                r["first"] = r["first"] or ts
+                r["last"] = ts
+                r["files"].add(g.group(1))
+                r["via"].add((re.findall(r"\[(\w+)\]", via.get(ip, "")) or ["?"])[-1])
         if ts < since:
             seen_before.add(ip)
             continue
@@ -209,25 +416,48 @@ def report(args, save):
     fails = collections.defaultdict(lambda: dict(n=0, xdbc=0, acct=set(), files=set(), chan=set(), first=None,
                                                  windows=collections.Counter()))
     admin, admin_fail, other = collections.Counter(), collections.Counter(), collections.Counter()
+    hourly = collections.defaultdict(lambda: dict(n=0, ips=collections.Counter(), acct=set()))   # all addresses but the server
+    by_file = collections.defaultdict(lambda: dict(n=0, ips=set(), acct=set()))
+    span = []                                                                                      # first and last Event hour
     for l in lines(logs, "Event-old.log", "Event.log"):
         if l[:16] < since or not l[:4].isdigit():
             continue
+        span = [min(span[0], l[:13]), max(span[1], l[:13])] if span else [l[:13], l[:13]]
         msg = l.split("\t", 4)[-1]
-        if "authentication failed on database" in msg:
-            r = fails[ip_of(msg) or "?"]
+        # A failed sign-in is judged the same whichever door it came through: FileMaker Pro or Go (5003), WebDirect,
+        # the Data API, OData, XML or PHP (443), ODBC/JDBC (2399), or the Admin Console. Attacks try them all.
+        fm = re.search(r'on database "([^"]+)" using "(?:([^"]*?) )?\[(\w+)\]"', msg) \
+            if "authentication failed on database" in msg else None
+        am = re.search(r'Administrator authentication failed: "(.*?) \[[^\]]+\]"', msg) \
+            if "Administrator authentication failed" in msg else None
+        if am:
+            admin_fail[ip_of(msg)] += 1
+        if fm or am or "authentication failed on database" in msg:
+            fip = ip_of(msg) or "?"
+            where, acct, door = (fm.group(1), fm.group(2) or "", fm.group(3).lower()) if fm else \
+                ("(Admin Console)", am.group(1), "admin-console") if am else (None, None, None)
+            if fip not in LOCAL:
+                h = hourly[l[:13]]
+                h["n"] += 1
+                h["ips"][fip] += 1
+                if where:
+                    h["acct"].add(acct.lower())
+                    f = by_file[(where, l[:10])]
+                    f["n"] += 1
+                    f["ips"].add(fip)
+                    f["acct"].add(acct.lower())
+            r = fails[fip]
             r["n"] += 1
             r["first"] = r["first"] or l[:16]
             r["windows"][l[:15]] += 1
-            m = re.search(r'on database "([^"]+)" using "(?:([^"]*?) )?\[(\w+)\]"', msg)
-            if m:
-                r["files"].add(m.group(1))
-                r["acct"].add(m.group(2) or "")
-                r["chan"].add(m.group(3))
-                # The bracket names the connection type ([fmapp], [fmxml] ...); fmxdbc is ODBC/JDBC on 2399
-                if m.group(3).lower() == "fmxdbc":
+            if where:
+                if fm:
+                    r["files"].add(where)
+                r["acct"].add(acct)
+                r["chan"].add(door)
+                # fmxdbc is ODBC/JDBC on 2399, which a web rate limiter or WAF never sees
+                if door == "fmxdbc":
                     r["xdbc"] += 1
-        elif "Administrator authentication failed" in msg:
-            admin_fail[ip_of(msg)] += 1
         elif "Administrator connected" in msg:
             m = re.search(r'"(\S+) \[([^\]]+)\]" \(([^)]+)\)', msg)
             if m:
@@ -237,7 +467,9 @@ def report(args, save):
             other[re.sub(r"\d", "#", msg)[:150]] += 1
 
     out(f"\n## Failed FileMaker sign-ins: {sum(r['n'] for r in fails.values())} from {len(fails)} addresses")
+    out("   Every door is judged the same: " + ", ".join(f"{v} ({k})" for k, v in DOORS.items()))
     out(f"   Flags: POSSIBLE-COMPROMISE, SIGNED-IN, NEVER-SUCCEEDED, BEFORE-ACCESS-LOG, MANY-ACCOUNTS (3+), MANY-FILES (3+),\n"
+        f"   MANY-DOORS ({MANY_DOORS}+ connection types),\n"
           f"   GENERIC/DEFAULT account, XDBC (ODBC/JDBC, port 2399), RATE ({FAIL_RATE}+ in 10 minutes), SERVER-ITSELF")
     xdbc_fails = {ip: r["xdbc"] for ip, r in fails.items() if r["xdbc"]}
     if xdbc_fails:
@@ -265,6 +497,8 @@ def report(args, save):
             flags.append("MANY-ACCOUNTS")
         if len(r["files"]) >= 3:
             flags.append("MANY-FILES")
+        if len(r["chan"]) >= MANY_DOORS:
+            flags.append("MANY-DOORS")
         if accts & GENERIC:
             flags.append("GENERIC/DEFAULT")
         if r["xdbc"]:
@@ -292,6 +526,19 @@ def report(args, save):
               "   have the person change that password, and don't copy that log line into a report")
     if not access_first:
         out("   Access.log has no dated lines, so no address can be said to have never signed in")
+
+    server_wide(hourly, by_file, span)
+
+    # Guest needs no password, so a Guest sign-in never shows as a failure. Through an API or WebDirect it is
+    # a sign-in from anywhere (Claris, "Lock Down Your FileMaker Server", Appendix B: any Guest sign-in through an API)
+    out(f"\n## Guest sign-ins (Access.log): {sum(r['n'] for r in guests.values())} from {len(guests)} addresses")
+    if guests:
+        out("   Flags: GUEST, API (through the Data API, OData, XML or PHP), WEBDIRECT, NEW. Guest should be off in every file")
+    for ip, r in sorted(guests.items(), key=lambda x: -x[1]["n"]):
+        flags = ["GUEST"] + (["API"] if r["via"] & {"fmrest", "fmodata", "fmxml", "fmphp"} else []) \
+            + (["WEBDIRECT"] if "fmwebdirect" in r["via"] else []) + (["NEW"] if is_new(ip) else [])
+        out(f"  {ip:40} n={r['n']:<5} {r['first']}..{r['last'][5:]} files={sorted(r['files'])[:6]} via={sorted(r['via'])} "
+            + " ".join(flags))
 
     out(f"\n## ODBC/JDBC connections (Access.log): {sum(x['n'] for x in xdbc.values())} from {len(xdbc)} addresses")
     for ip, x in sorted(xdbc.items(), key=lambda i: -i[1]["n"]):
@@ -380,6 +627,8 @@ def report(args, save):
             if accts & GENERIC:
                 flags.append("GUEST/GENERIC")
             out(f"  {win} {who[:50]:50} reads={r['n']:<4} MB={r['mb']:<6.1f} tables={len(r['tables']):<3} {' '.join(flags)}")
+
+    api_requests(logs, since, is_new, seen_before)
 
     rotated = sorted(n for n in logs if n.startswith("nginx-access.log-"))
     ng = [p for p in (l.split("\t") for l in lines(logs, *rotated, "nginx-access.log")) if len(p) >= 7]

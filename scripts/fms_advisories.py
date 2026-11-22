@@ -18,11 +18,16 @@ Usage:
 
 Confirmed means published by NVD or Claris. Claims seen only on third-party sites are not
 included. Uses only the Python standard library.
+
+With an NVD API key in the NVD_API_KEY environment variable, the request carries it, so NVD's
+higher limit applies (50 requests in 30 seconds rather than 5). The key goes to NVD only.
 """
 import json
 import os
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -49,13 +54,25 @@ def load_bundled():
 
 def fetch_nvd():
     """Return CVE entries from NVD in the bundled format, or None if NVD can't be reached."""
-    req = urllib.request.Request(NVD, headers={"User-Agent": "cadenceux-fms-security"})
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            data = json.load(r)
-    except (OSError, ValueError) as e:
-        print(f"  (NVD not reachable: {e}; using the bundled list)")
-        return None
+    headers = {"User-Agent": "cadenceux-fms-security"}
+    if os.environ.get("NVD_API_KEY"):
+        headers["apiKey"] = os.environ["NVD_API_KEY"]
+    req = urllib.request.Request(NVD, headers=headers)
+    # NVD answers 503 when busy and 403 or 429 when asked too often, and both usually pass: one more try, 10 seconds on
+    for attempt in (1, 2):
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                data = json.load(r)
+            break
+        except urllib.error.HTTPError as e:
+            if attempt == 1 and e.code in (403, 429) or attempt == 1 and e.code >= 500:
+                time.sleep(10)
+                continue
+            print(f"  (NVD not reachable: {e}; using the bundled list)")
+            return None
+        except (OSError, ValueError) as e:
+            print(f"  (NVD not reachable: {e}; using the bundled list)")
+            return None
     out = []
     for v in data.get("vulnerabilities", []):
         c = v["cve"]
@@ -134,6 +151,12 @@ def main():
     for line, ver in latest.items():
         if vt(newest_fix)[0] == int(line) and vt(newest_fix) > vt(ver):
             print(f"  NVD lists a fix in {newest_fix}, newer than the bundled latest {ver}: check the release notes")
+
+    comps = data.get("component_advisories", [])
+    if comps and product == "server":
+        print("\n## Component advisories with no fixed release yet (listed, not matched)")
+        for c in comps:
+            print(f"  {c['component']}: {c['summary']}\n       What to do: {c['action']}\n       {c['source']}")
 
     if not args:
         for prod in ("server", "pro", "cloud"):

@@ -3,7 +3,9 @@
 
 Reads one SaXML export, or a folder of them (one per hosted file), and reports per file:
 Guest, auto-login (File Options "Log in using"), generic and [Full Access] accounts,
-extended privileges that open the Data API, OData and XML, Encryption at Rest, file
+extended privileges ([Full Access] should have only fmapp and fmreauthenticate, per Claris's
+"Lock Down Your FileMaker Server"), re-authentication for idle disconnect, print and export
+rights, the fmplugin protection, the minimum client version, Encryption at Rest, file
 reference protection, passwords typed into scripts, and credentials in Insert from URL.
 
 Needs no server connection, no credentials and no Claris ADK: only the exports. Make one
@@ -29,6 +31,10 @@ GENERIC = {"admin", "administrator", "web", "webuser", "user", "api", "apiuser",
 API_PRIVS = {"fmrest": "Data API", "fmodata": "OData", "fmxml": "XML", "fmphp": "PHP"}
 WATCH_PRIVS = ["fmrest", "fmodata", "fmxml", "fmphp", "fmxdbc", "fmwebdirect", "fmurlscript"]
 FULL = "[Full Access]"
+# What [Full Access] should have and nothing more (Claris, "Lock Down Your FileMaker Server", 4.1)
+FULL_ALLOWED = re.compile(r"^(fmapp|fmreauthenticate\d+)$")
+# The oldest FileMaker line still getting fixes; the minimum client version should be at least this
+OLDEST_CLIENT = 21
 # Elements that hold most of a file's bulk; cleared once read so large exports stream in
 # bounded memory.
 BULK = {"Layout", "Step", "Field", "TableOccurrence", "Relationship", "ValueList", "CustomFunction",
@@ -47,7 +53,7 @@ def text_of(el, path):
 def audit(path):
     info = dict(format="?", file=os.path.basename(path))
     accounts, privsets, extprivs = [], {}, {}
-    login, encryption, refs_required = None, None, None
+    login, encryption, refs_required, minimum = None, None, None, None
     pw_literals, url_creds, odbc = [], [], 0
     script_stack = []
     try:
@@ -74,6 +80,8 @@ def audit(path):
                     export=other is not None and other.get("Export") == "True")
             elif tag == "ExtendedPrivilege":
                 extprivs[el.get("name", "?")] = [r.get("name", "?") for r in el.iter("PrivilegeSetReference")]
+            elif tag == "Minimum" and minimum is None and el.get("version"):
+                minimum = el.get("version")
             elif tag == "Login" and login is None:
                 login = dict(type=el.get("type"), account=text_of(el, "AccountName"))
             elif tag == "Encryption" and encryption is None:
@@ -128,6 +136,37 @@ def audit(path):
     full_api = [API_PRIVS[p] for p in API_PRIVS if FULL in extprivs.get(p, [])]
     if full_api:
         f.append(("HIGH", "F6", f"[Full Access] can sign in over {', '.join(full_api)}; turn those off for it"))
+    full_other = sorted(p for p, sets in extprivs.items()
+                        if FULL in sets and p not in API_PRIVS and not FULL_ALLOWED.match(p))
+    if full_other:
+        f.append(("MEDIUM", "F6", f"[Full Access] also has {', '.join(full_other)}; it should have only fmapp and "
+                  "fmreauthenticate10 (Claris, Lock Down guide 4.1)"))
+    # Sets that enabled accounts use, apart from [Full Access] (checked above)
+    used = sorted({a["privset"] for a in accounts if a["enabled"]} - {"?"})
+    reauth = {s for p, sets in extprivs.items() if re.match(r"fmreauthenticate\d+$", p) for s in sets}
+    no_reauth = [s for s in used if s not in reauth]
+    if no_reauth:
+        f.append(("MEDIUM", "F13", f"no fmreauthenticate privilege, so idle users aren't asked to sign in again: "
+                  f"{', '.join(no_reauth[:8])}{' …' if len(no_reauth) > 8 else ''}. Turn on fmreauthenticate10, and "
+                  "set the server's auto-logout for each client type"))
+    exporting = [s for s in used if s != FULL and privsets.get(s, {}).get("export")]
+    if exporting:
+        f.append(("INFO", "F14", f"export allowed for: {', '.join(exporting[:8])}{' …' if len(exporting) > 8 else ''}. "
+                  "Read-only sets can still export every record they see: keep export to the sets that need it"))
+    if "fmplugin" not in extprivs and not any(p.startswith("fmplugin") for p in extprivs):
+        f.append(("MEDIUM", "F15", "no fmplugin extended privilege: the file predates 19.2.1, so any plug-in can run "
+                  "scripts and SQL in it from outside. Add an fmplugin privilege, left off for every set"))
+    elif extprivs.get("fmplugin"):
+        f.append(("MEDIUM", "F15", f"the generic fmplugin is on for {', '.join(extprivs['fmplugin'][:6])}, which admits "
+                  "every plug-in: allow only the ones needed (fmplugin plus the plug-in's ID) and turn the generic one off"))
+    if minimum:
+        try:
+            line = int(float(minimum.split(".")[0]))
+        except ValueError:
+            line = 0
+        if line < OLDEST_CLIENT:
+            f.append(("MEDIUM", "F16", f"minimum client version is {minimum}: set it to {OLDEST_CLIENT}.0 or later "
+                      "(File > File Options > Open), so unsupported FileMaker versions can't open the file"))
     for p in WATCH_PRIVS:
         sets = [s for s in extprivs.get(p, []) if s != FULL]
         if sets:

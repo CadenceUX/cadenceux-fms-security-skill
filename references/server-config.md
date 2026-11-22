@@ -39,15 +39,18 @@ Use the first route that's available. Never ask for the Admin Console password.
 | S3 | Admin Console accounts | Administration > External Authentication; Administrator Roles (21.0.1+) | Named accounts through an identity provider or admin roles; the built-in account kept for emergencies, with a strong password not shared with other servers |
 | S4 | Filter databases in client applications | Configuration > FileMaker Clients | On (default from 2024). It hides the file list in FileMaker Pro, Go, WebDirect and the Data API |
 | S5 | Deny Guest and auto-login | `fmsadmin get serverprefs DenyGuestAndAutoLogin` (in Docker: `docker exec -it <container> fmsadmin …`) | `true`. **The default is `false`**, so expect to set it: `fmsadmin set serverprefs DenyGuestAndAutoLogin=true`. With S4 on, the Data API file list then needs credentials |
-| S6 | Secure files only | `requireSecureDB` in the admin review; `SecureFilesOnly` in `fmsadmin get serverconfig` | On (the default). Files where Guest has [Full Access], a [Full Access] account has no password, or auto-login uses a [Full Access] account can't be hosted |
+| S6 | Secure files only (RequireSecureDB; not the Secure folder, S16) | `requireSecureDB` in the admin review; `SecureFilesOnly` in `fmsadmin get serverconfig` | On (the default). Files where Guest has [Full Access], a [Full Access] account has no password, or auto-login uses a [Full Access] account can't be hosted |
 | S7 | Unused services | Connectors: Data API, OData, XML, PHP, ODBC/JDBC, WebDirect | Every service not in the intended exposure is off |
 | S8 | SSL certificate | Configuration > SSL Certificate | A trusted certificate, not the Claris test certificate, not near expiry |
 | S9 | Logging | Logs > Log Settings | Top call statistics on (needed to see record downloads); logs copied off the server daily |
-| S10 | Backups | Backups; Progressive Backup; schedules; the recovery expectations from intake | The backup interval is no longer than the data the owner can lose; at least one copy beyond the server's network; a restore tested and timed within the downtime the owner can bear (see Recovery readiness) |
-| S11 | Schedules and plug-ins | Schedules; Plug-ins | Every enabled schedule and plug-in is expected. System-level script schedules run with operating-system rights |
+| S10 | Backups | Backups; Progressive Backup; schedules; Remote Backup (26.0.1+); the recovery expectations from intake | The backup interval is no longer than the data the owner can lose; at least one copy beyond the server's network (Remote Backup, a drive set up in Claris Customer Console that backs up changed files every 20 minutes, counts); a restore tested and timed within the downtime the owner can bear (see Recovery readiness) |
+| S11 | Schedules | Schedules | Every enabled schedule is expected. System-level script schedules run with operating-system rights |
+| S17 | Server-side plug-ins | Connectors > Plug-ins: one switch per engine (FileMaker Script Engine, Web Publishing, Data API); the admin review reads all three | Each engine's plug-ins off unless a server-side script needs them: that's the kill switch. "Allow install" off. Plug-ins that can run operating-system commands (BaseElements, MBS, ScriptMaster) only where needed: attackers have moved from a compromised file to the machine through them. Check all three plug-in folders on the machine too. Changing Web Publishing restarts the Web Publishing Engine; the Data API needs a FileMaker Server restart |
+| S18 | Idle sessions | Configuration > FileMaker Clients (Pro and Go session timeout; WebDirect timeout) | Pro and Go time out when idle, with `fmreauthenticate10` in each privilege set (file-security F13). Together they disconnect or re-prompt idle users |
 | S12 | Perform Script on Server | Configuration > Script Engine | Limited to what's needed (`fmsadmin set serverconfig scriptsessions=0` turns it off) |
 | S13 | Encryption at Rest | Databases (the admin review lists unencrypted files) | Files with personal or sensitive data encrypted |
 | S14 | Operating system | Server host | Remote Desktop and screen sharing off or allow-listed; OS updates current; a WAF or rate limiter in front of 443 where the APIs are public |
+| S16 | Secure database folder | Databases (each file's folder); `secureDatabaseFolder` in the admin review | The files reachable from outside are in the server's **Secure** folder (`Data/Secure/`), or DenyGuestAndAutoLogin (S5) is on. Files there always get RequireSecureDB and DenyGuestAndAutoLogin, whatever the server-wide settings say, and must have Encryption at Rest, or the server won't host them. Claris's way to protect the most exposed files first when S5 can't be turned on yet, and a safeguard afterwards: Guest and auto-login can't creep back (Claris, "Lock Down Your FileMaker Server", 4.2) |
 | S15 | PHP engine | `php -v` on the server, run by the user; look for a `php` folder under FileMaker Server's Web Publishing folder | No engine, or a patched and supported PHP. FileMaker Server no longer installs PHP, but older servers bundled it and an upgrade may leave it in place. `fms_advisories.py` lists FileMaker CVEs only, so check the version against php.net. Unused: remove it |
 
 FileMaker **locks an internal file account for five minutes** after five failed sign-ins within
@@ -79,6 +82,18 @@ finding with a priority and an owner (who fixes it: the developer, the hosting p
   Admin API keys: never the passwords. No date, or one older than a known incident, a provider
   breach or someone with access leaving, is a finding. A restored file brings back its accounts'
   passwords as they were on the day of that backup, so the plan resets them after a restore.
+- **Standby Server (26.0.1+).** A standby takes over after hardware or site failure, switched
+  manually in the Admin Console. It doesn't undo a compromise: data and settings are replicated
+  to it too, so it never replaces a backup from before an intrusion.
+- **Backup rules.** Never open, edit or move an original backup: work on a copy. Don't point
+  third-party backup software at live hosted files; let FileMaker Server make the backup, then
+  back up that copy. A hosting provider can also go down for days: know what the owner holds
+  themselves and practise a restore into an environment they control.
+- **Every function reachable from outside.** For each public form, API integration, WebDirect
+  solution or partner login: what a day and a week offline cost, the fallback, who switches to
+  it, and how its data gets back into FileMaker (Claris, "Lock Down Your FileMaker Server",
+  6.5). A stopgap form service holds the data at a third party: know what it keeps and for how
+  long.
 - **The plan itself.** A written DR plan, agreed with the data owner, that names who is called
   and in what order. Expectations nobody has agreed go in the report as "to agree with the
   owner", rated Check.
@@ -101,7 +116,13 @@ Ask, and list each in the report:
   those are stored: on the tool vendor's servers counts).
 - Integrations with their own FileMaker accounts.
 
-Each should have its own login or key, so it can be revoked alone. A tool still signing in
+Each should have its own login or key, so it can be revoked alone.
+
+**Who is responsible for what.** A hosting provider screens incoming traffic (pattern detection,
+known bad addresses); the solution's settings stay the owner's and their developer's. Record
+which of them owns each finding. FileMaker Cloud refuses Guest and signs in through Claris ID
+or an identity provider, so these attacks mostly don't apply there, but a weak Claris ID
+password is still weak: turn on its multi-factor authentication. A tool still signing in
 with an old password shows up in the log review as daily admin sign-in failures.
 
 ## Severity
@@ -109,7 +130,7 @@ with an old password shows up in the log review as daily admin sign-in failures.
 | Severity | Examples |
 |---|---|
 | Critical | Version with a published remote-code-execution fix outstanding; S6 off; Admin Console open to any address on a version before 21.0.1 |
-| High | S2 off; shared or default admin credentials; S4 or S5 off; default certificate |
+| High | S2 off; shared or default admin credentials; S4 or S5 off (unless every exposed file is in the Secure folder, S16); default certificate |
 | High | No copy beyond the server's network when the files hold personal data |
-| Medium | Unused services on; no top call statistics; no off-network backup; backup interval longer than the owner's data-loss limit; restore never tested; no DR plan agreed with the owner; unexpected schedules or plug-ins |
+| Medium | Unused services on; plug-ins on for an engine nothing needs, or an operating-system-command plug-in on the server; no idle timeout for Pro and Go; no top call statistics; no off-network backup; backup interval longer than the owner's data-loss limit; restore never tested; no DR plan agreed with the owner; unexpected schedules or plug-ins |
 | Low | No admin roles on a server with one administrator |

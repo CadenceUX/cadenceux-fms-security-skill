@@ -1,8 +1,10 @@
 {
- "checked": "2026-10-31",
+ "checked": "2026-11-19",
  "sources": {
   "nvd": "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=FileMaker",
-  "release_notes": "https://help.claris.com/en/server-release-notes/content/"
+  "release_notes": "https://help.claris.com/en/server-release-notes/content/",
+  "attacks": "https://support.claris.com/s/answerview?anum=000049228&language=en_US",
+  "lockdown_guide": "Claris, \"Lock Down Your FileMaker Server\", 2026-11-06"
  },
  "latest": {
   "26": "26.0.3",
@@ -10,7 +12,7 @@
   "21": "21.1.8"
  },
  "oldest_supported_line": 21,
- "notes": "cves: from NVD, each affected range tagged with its product (server, pro, cloud) from NVD's CPE data; source is the Claris article where NVD links one; platform is set where the CVE names one. release_note_fixes: FileMaker Server security fixes in Claris's release notes without their own CVE, matched only on the lines Claris names. cloud entries are listed, never matched: Claris patches FileMaker Cloud.",
+ "notes": "cves: from NVD, each affected range tagged with its product (server, pro, cloud) from NVD's CPE data; source is the Claris article where NVD links one; platform is set where the CVE names one. release_note_fixes: FileMaker Server security fixes in Claris's release notes without their own CVE, matched only on the lines Claris names. cloud entries are listed, never matched: Claris patches FileMaker Cloud. component_advisories: Claris articles on components bundled with FileMaker Server that have no fixed release yet, so they are listed, never matched; move one to release_note_fixes when Claris names the release that fixes it. A 26.1.x version is ahead of Claris's public release notes (a pre-release) until they list it.",
  "cves": [
   {
    "id": "CVE-2026-86926",
@@ -267,6 +269,20 @@
  ],
  "release_note_fixes": [
   {
+   "id": "RN-22.0.7-components",
+   "published": "2026-08",
+   "cvss": null,
+   "affected": [
+    {
+     "from": "22.0.0",
+     "before": "22.0.7",
+     "product": "server"
+    }
+   ],
+   "source": "https://help.claris.com/en/server-release-notes/content/",
+   "summary": "Security updates: Apache Tomcat upgraded to 10.1.54 and Node.js to 22.23.1"
+  },
+  {
    "id": "RN-26.0.3-imagemagick",
    "published": "2026-09",
    "cvss": null,
@@ -373,6 +389,24 @@
    ],
    "source": "https://help.claris.com/en/server-release-notes/content/",
    "summary": "Admin Console Restrict Access could be bypassed with a forged X-Forwarded-For header"
+  }
+ ],
+ "component_advisories": [
+  {
+   "id": "KB-000049227-nodejs",
+   "published": "2026-11",
+   "component": "Node.js",
+   "source": "https://support.claris.com/s/answerview?anum=000049227&language=en_US",
+   "summary": "Node.js vulnerabilities in the runtime behind the Admin Console, Admin API and Data API (not FileMaker Pro, Go or WebDirect's core). Claris rates the risk low; updated runtimes come in upcoming maintenance releases.",
+   "action": "Restrict the Admin Console (ports 16000 and 443) to trusted networks and VPNs, use strong Admin Console and Admin API passwords, and apply the maintenance release when it ships."
+  },
+  {
+   "id": "KB-000049229-tomcat",
+   "published": "2026-11",
+   "component": "Apache Tomcat",
+   "source": "https://support.claris.com/s/answerview?anum=000049229&language=en_US",
+   "summary": "Apache Tomcat vulnerabilities in the bundled Web Publishing Engine. Claris finds no known exploitable exposure in recommended deployments; an updated Tomcat comes in FileMaker Server 26.1.1.",
+   "action": "Don't modify or replace the bundled Tomcat files by hand. Apply 26.1.1 once it is released."
   }
  ]
 }

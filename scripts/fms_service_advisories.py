@@ -17,6 +17,9 @@ references/os-lifecycle.json.
 Only product names, versions and package names leave this Mac, never a hostname or an address. Without network
 access, or with --offline or FMS_SCANNER_OFFLINE set, nothing is looked up and the report says so.
 
+With an NVD API key in the NVD_API_KEY environment variable, NVD requests carry it and are spaced 1 second apart
+rather than 6.5, under NVD's higher limit (50 requests in 30 seconds rather than 5). The key goes to NVD only.
+
 Usage:
     python3 fms_service_advisories.py <services.json> [--offline] [--json <path>]
 
@@ -39,7 +42,9 @@ OSV = "https://api.osv.dev/v1/query"
 # OSV's name for each Ubuntu LTS release the SSH greeting can name
 UBUNTU_RELEASES = {"bionic": "18.04", "focal": "20.04", "jammy": "22.04", "noble": "24.04"}
 TIMEOUT = 30
-NVD_GAP = 6.5      # seconds between NVD requests: without an API key NVD allows 5 in 30 seconds
+NVD_KEY = os.environ.get("NVD_API_KEY", "")
+# seconds between NVD requests: without an API key NVD allows 5 in 30 seconds, with one 50
+NVD_GAP = 1.0 if NVD_KEY else 6.5
 UBUNTU_PAGE = 20   # the most Ubuntu's API returns per request
 OPEN_STATUSES = {"needed": "no Ubuntu fix yet", "pending": "Ubuntu fix pending", "deferred": "Ubuntu deferred the fix"}
 SKIP_STATUSES = {"not-affected", "ignored", "DNE"}
@@ -110,8 +115,12 @@ def severity(score, priority=""):
 
 def http_get(url, body=None):
     """One GET, or a POST of body as JSON, tried again once after a timeout or a server error: Ubuntu's API
-    sometimes takes 50 seconds and gives a 504."""
+    sometimes takes 50 seconds and gives a 504. NVD also answers 403 or 429 when asked too often, which passes
+    too, so for NVD those are tried again, 10 seconds on. The NVD API key, when there is one, goes to NVD only."""
+    nvd = url.startswith(NVD)
     headers = {"User-Agent": "cadenceux-fms-security"}
+    if nvd and NVD_KEY:
+        headers["apiKey"] = NVD_KEY
     if body is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, headers=headers, data=json.dumps(body).encode() if body is not None else None)
@@ -120,12 +129,12 @@ def http_get(url, body=None):
             with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            if attempt == 2 or e.code < 500:
+            if attempt == 2 or (e.code < 500 and not (nvd and e.code in (403, 429))):
                 raise
         except OSError as e:   # socket.timeout on Python 3.9, macOS's own; URLError wraps it when connecting
             if attempt == 2 or "timed out" not in str(e):
                 raise
-        time.sleep(3)
+        time.sleep(10 if nvd else 3)
 
 
 def in_range(match, version):
