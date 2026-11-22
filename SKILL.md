@@ -19,7 +19,7 @@ compatibility: >-
   The file audit needs FileMaker Pro to make Save a Copy as XML exports. Claris ADK is optional.
 metadata:
   author: Darrin Southern, CadenceUX
-  version: "1.4.1"
+  version: "1.4.2"
 ---
 
 # FileMaker Server security check

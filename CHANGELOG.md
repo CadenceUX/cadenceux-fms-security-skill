@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.2] — 2026-11-22
+
+### Fixed
+
+- `scripts/fms_log_sweep.py`: each line of the report's top now has a blank line after it. Copied
+  into a markdown report as SKILL.md says, the lines ran into one paragraph.
+
+### Verified
+
+- `test_fms_log_sweep.py` 54 of 54 (one new: the blank lines); `test_fms_scan.py` 58 of 58;
+  `test_service_scan.py` 74 of 74.
+
 ## [1.4.1] — 2026-11-22
 
 The several-servers review now opens the way the FMS Scanner app's Global Report does.

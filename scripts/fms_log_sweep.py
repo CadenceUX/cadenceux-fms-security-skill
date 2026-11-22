@@ -958,8 +958,9 @@ def header(r):
         lines.append("✓ None of the attacking addresses ever signed in.")
     lines.append(f"Left out: {lo.get('verified', 0):,} failures from verified addresses and computers, "
                  f"{lo.get('private', 0):,} from the servers themselves and private networks.")
-    lines += ["", "## What to do"] + [f"{i}. {x}" for i, x in enumerate(what_to_do(r), 1)]
-    return lines
+    # A blank line after each, so a markdown report keeps them as separate lines instead of one run-on paragraph
+    spaced = [y for x in lines for y in (x, "")]
+    return spaced + ["## What to do", ""] + [f"{i}. {x}" for i, x in enumerate(what_to_do(r), 1)]
 
 
 def brief(r, out):

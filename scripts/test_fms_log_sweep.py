@@ -285,6 +285,10 @@ todo = top.split("## What to do")[1]
 check("command line: What to do, numbered and worst first, the attackers that signed in first",
       todo.lstrip().startswith("1. **Confirm today who signed in to admin") and "198.51.100.80" in todo.split("\n3.")[0]
       and "**Block the addresses below**" in todo and todo.rstrip().splitlines()[-1].endswith("left out of the next check."))
+facts = [l for l in top.split("## What to do")[0].splitlines()]
+check("command line: each line of the top has a blank line after it, so a markdown report keeps them apart",
+      all(not facts[i] or facts[i + 1] == "" for i in range(len(facts) - 1)) and sum(1 for l in facts if l) >= 7
+      or print(facts))
 check("times read as the app shows them", S.when("2026-11-22 15:47") == "22 Nov 2026, 3:47 pm"
       and S.when("2026-01-05 09:05") == "5 Jan 2026, 9:05 am" and S.when("") == "")
 check("command line: no lookups unless asked", "rdns" not in json.dumps(json.load(open(cli_out))["block"]))
